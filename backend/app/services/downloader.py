@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import contextlib
+import json
+import os
+import signal
+import subprocess
+import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from .ytdlp_manager import YtDlpManager
 
 ProgressCb = Callable[[str, float], None]  # (stage, percent 0..100)
 CancelCheck = Callable[[], bool]
@@ -92,46 +102,129 @@ class Downloader(Protocol):
         ...
 
 
-class YtDlpDownloader:
-    """Triển khai ``Downloader`` bằng thư viện yt-dlp (chạy trong process hiện tại)."""
+class SubprocessDownloader:
+    """Chạy yt-dlp trong tiến trình con, dùng python của venv yt-dlp đang active.
 
-    def __init__(self, ffmpeg_location: str | None = None):
-        self._ffmpeg_location = ffmpeg_location
+    Nhờ vậy đổi version yt-dlp không cần restart app, và hủy job bằng cách kill tiến trình.
+    """
+
+    INFO_TIMEOUT = 120
+    DOWNLOAD_TIMEOUT = 2 * 3600
+
+    def __init__(
+        self,
+        manager: YtDlpManager,
+        *,
+        ffmpeg_location: str | None = None,
+        runner: Path | None = None,
+    ):
+        self._manager = manager
+        self._ffmpeg = ffmpeg_location
+        self._runner = runner or manager.runner
 
     def version(self) -> str:
-        from yt_dlp.version import __version__
+        return self._manager.current().version
 
-        return __version__
+    # ---- gọi tiến trình con ----
+    def _spawn(self, python: str, request: dict[str, Any]) -> subprocess.Popen[str]:
+        return subprocess.Popen(
+            [python, str(self._runner), json.dumps({**request, "ffmpeg": self._ffmpeg})],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,  # để kill được cả ffmpeg do yt-dlp sinh ra
+        )
 
-    def _base_opts(self) -> dict[str, Any]:
-        opts: dict[str, Any] = {
-            "noplaylist": True,
-            "quiet": True,
-            "no_warnings": True,
-            "noprogress": True,
-            "socket_timeout": 30,
-            "retries": 3,
-        }
-        if self._ffmpeg_location:
-            opts["ffmpeg_location"] = self._ffmpeg_location
-        return opts
+    @staticmethod
+    def _kill(proc: subprocess.Popen[str]) -> None:
+        with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+            os.killpg(proc.pid, signal.SIGTERM)
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+                os.killpg(proc.pid, signal.SIGKILL)
+
+    def _run(
+        self,
+        request: dict[str, Any],
+        *,
+        timeout: float,
+        on_event: Callable[[dict[str, Any]], None],
+        should_cancel: CancelCheck = lambda: False,
+    ) -> None:
+        """Chạy một lệnh, gọi ``on_event`` cho từng sự kiện; ném lỗi tương ứng khi thất bại."""
+        with self._manager.use() as runtime:
+            proc = self._spawn(runtime.python, request)
+            stderr_buf: list[str] = []
+            drain = threading.Thread(
+                target=lambda: stderr_buf.append(proc.stderr.read() if proc.stderr else ""),
+                daemon=True,
+            )
+            drain.start()
+            state = {"cancelled": False, "timed_out": False}
+            done = threading.Event()
+
+            def watchdog() -> None:
+                deadline = time.monotonic() + timeout
+                while not done.wait(0.2):
+                    if should_cancel():
+                        state["cancelled"] = True
+                    elif time.monotonic() > deadline:
+                        state["timed_out"] = True
+                    else:
+                        continue
+                    self._kill(proc)
+                    return
+
+            threading.Thread(target=watchdog, daemon=True).start()
+            error: str | None = None
+            try:
+                assert proc.stdout is not None
+                for line in proc.stdout:
+                    try:
+                        event = json.loads(line)
+                    except ValueError:
+                        continue  # dòng rác không phải JSON
+                    if event.get("type") == "error":
+                        error = str(event.get("message", ""))
+                    else:
+                        on_event(event)
+                proc.wait()
+            finally:
+                done.set()
+                if proc.poll() is None:
+                    self._kill(proc)
+                drain.join(timeout=2)
+
+            if state["cancelled"]:
+                raise JobCancelledError()
+            if state["timed_out"]:
+                raise DownloadError("network", "Quá thời gian chờ khi chạy yt-dlp")
+            if error is not None:
+                raise to_download_error(RuntimeError(error))
+            if proc.returncode != 0:
+                tail = (stderr_buf[0] if stderr_buf else "").strip()[-300:]
+                raise to_download_error(
+                    RuntimeError(tail or f"yt-dlp thoát với mã {proc.returncode}")
+                )
 
     def fetch_info(self, url: str) -> VideoInfo:
-        import yt_dlp
+        info: dict[str, Any] = {}
 
-        try:
-            with yt_dlp.YoutubeDL({**self._base_opts(), "skip_download": True}) as ydl:
-                info = ydl.extract_info(url, download=False)
-        except Exception as exc:
-            raise to_download_error(exc) from exc
+        def on_event(e: dict[str, Any]) -> None:
+            if e.get("type") == "info":
+                info.update(e)
+
+        self._run({"cmd": "info", "url": url}, timeout=self.INFO_TIMEOUT, on_event=on_event)
         if not info:
             raise DownloadError("unavailable", "Không lấy được thông tin video")
         return VideoInfo(
-            video_id=info.get("id") or "",
+            video_id=info.get("video_id") or "",
             title=info.get("title") or "Không có tiêu đề",
-            channel=info.get("channel") or info.get("uploader"),
+            channel=info.get("channel"),
             thumbnail=info.get("thumbnail"),
-            duration=float(info["duration"]) if info.get("duration") else None,
+            duration=info.get("duration"),
         )
 
     def download(
@@ -142,54 +235,16 @@ class YtDlpDownloader:
         on_progress: ProgressCb,
         should_cancel: CancelCheck,
     ) -> Path:
-        import yt_dlp
-        from yt_dlp.utils import DownloadCancelled
+        def on_event(e: dict[str, Any]) -> None:
+            if e.get("type") == "progress":
+                on_progress(str(e["stage"]), float(e["percent"]))
 
-        class _Cancelled(DownloadCancelled):
-            pass
-
-        def check() -> None:
-            if should_cancel():
-                raise _Cancelled()
-
-        def progress_hook(d: dict[str, Any]) -> None:
-            check()
-            if d.get("status") == "downloading":
-                total = d.get("total_bytes") or d.get("total_bytes_estimate")
-                if total:
-                    on_progress("downloading", min(99.0, d["downloaded_bytes"] / total * 100))
-            elif d.get("status") == "finished":
-                on_progress("downloading", 100.0)
-
-        def pp_hook(d: dict[str, Any]) -> None:
-            check()
-            if d.get("postprocessor") == "ExtractAudio":
-                on_progress("converting", 100.0 if d.get("status") == "finished" else 0.0)
-
-        opts = {
-            **self._base_opts(),
-            "format": "bestaudio/best",
-            "outtmpl": f"{out_base}.%(ext)s",
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": str(bitrate),
-                }
-            ],
-            "progress_hooks": [progress_hook],
-            "postprocessor_hooks": [pp_hook],
-        }
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([url])
-        except _Cancelled as exc:
-            raise JobCancelledError() from exc
-        except Exception as exc:
-            if isinstance(exc, JobCancelledError):
-                raise
-            raise to_download_error(exc) from exc
-
+        self._run(
+            {"cmd": "download", "url": url, "out_base": str(out_base), "bitrate": bitrate},
+            timeout=self.DOWNLOAD_TIMEOUT,
+            on_event=on_event,
+            should_cancel=should_cancel,
+        )
         result = out_base.with_suffix(".mp3")
         if not result.exists():
             raise DownloadError("ffmpeg", "Không tìm thấy file MP3 sau khi chuyển đổi")

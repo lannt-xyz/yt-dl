@@ -57,3 +57,45 @@ export function Card({ className, children }: { className?: string; children: Re
     </section>
   );
 }
+
+export function Switch({
+  checked,
+  onChange,
+  label,
+  description,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="flex min-h-12 cursor-pointer items-center gap-3 py-1">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{label}</span>
+        {description && <span className="mt-0.5 block text-sm text-muted">{description}</span>}
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={clsx(
+          "relative h-8 w-14 shrink-0 rounded-full transition-colors disabled:opacity-50",
+          checked ? "bg-accent" : "bg-surface-2 ring-1 ring-line ring-inset",
+        )}
+      >
+        <span
+          className={clsx(
+            "absolute top-1 left-1 size-6 rounded-full bg-white shadow transition-transform",
+            checked && "translate-x-6",
+          )}
+        />
+      </button>
+    </label>
+  );
+}

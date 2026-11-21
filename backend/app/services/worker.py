@@ -4,6 +4,7 @@ import asyncio
 import logging
 import threading
 import time
+from collections.abc import Callable
 from typing import Any
 
 from ..config import Settings
@@ -21,12 +22,20 @@ class JobWorker:
     """Lấy job ``queued`` từ DB và chạy lần lượt (số luồng song song = ``concurrency``)."""
 
     def __init__(
-        self, repo: JobRepo, downloader: Downloader, broker: EventBroker, settings: Settings
+        self,
+        repo: JobRepo,
+        downloader: Downloader,
+        broker: EventBroker,
+        settings: Settings,
+        recovery: Callable[[], bool] | None = None,
     ):
         self.repo = repo
         self.downloader = downloader
         self.broker = broker
         self.settings = settings
+        # Gọi khi job lỗi "needs_update": True nếu đã chuyển sang yt-dlp mới hơn → tự thử lại 1 lần
+        self.recovery = recovery
+        self._recovered: set[str] = set()
         self._wake = asyncio.Event()
         self._tasks: list[asyncio.Task[None]] = []
         self._stopping = False
@@ -152,6 +161,8 @@ class JobWorker:
             self._finish(job_id, status="cancelled", progress=0)
         except DownloadError as exc:
             self._cleanup(job_id)
+            if self._try_recover(job_id, exc):
+                return
             self._finish(
                 job_id, status="failed", error_code=exc.code, error_message=exc.message,
                 ytdlp_version=self.downloader.version(),
@@ -164,6 +175,28 @@ class JobWorker:
         finally:
             with self._flags_lock:
                 self._cancel_flags.pop(job_id, None)
+
+    def _try_recover(self, job_id: str, exc: DownloadError) -> bool:
+        if exc.code != "needs_update" or self.recovery is None or job_id in self._recovered:
+            return False
+        self._recovered.add(job_id)
+        try:
+            updated = self.recovery()
+        except Exception:
+            log.exception("Tự cập nhật yt-dlp lỗi")
+            return False
+        if not updated:
+            return False
+        log.info("Đã cập nhật yt-dlp, thử lại job %s", job_id)
+        self.repo.update(job_id, status="queued", progress=0, started_at=None)
+        self._emit(job_id)
+        self.wake_threadsafe()
+        return True
+
+    def wake_threadsafe(self) -> None:
+        loop = self.broker._loop  # noqa: SLF001 - cùng event loop với broker
+        if loop is not None and not loop.is_closed():
+            loop.call_soon_threadsafe(self._wake.set)
 
     def _cleanup(self, job_id: str) -> None:
         for path in self.settings.audio_dir.glob(f"{job_id}.*"):

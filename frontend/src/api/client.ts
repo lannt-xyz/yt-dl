@@ -63,6 +63,20 @@ export interface TrimBody {
   title?: string;
 }
 
+export interface YtdlpStatus {
+  version: string;
+  source: "venv" | "bundled";
+  channel: "stable" | "nightly";
+  auto_update: boolean;
+  latest: string | null;
+  update_available: boolean;
+  last_check: number | null;
+  last_error: string | null;
+  versions: string[];
+  previous: string | null;
+  updating: boolean;
+}
+
 export const api = {
   listJobs: (limit = 200) => request<JobList>(`/api/jobs?limit=${limit}`),
   createJob: (url: string, opts: CreateJobOptions = {}) =>
@@ -74,5 +88,17 @@ export const api = {
   getPeaks: (id: string) => request<Peaks>(`/api/jobs/${id}/peaks`),
   trim: (id: string, body: TrimBody) =>
     request<Job>(`/api/jobs/${id}/trim`, { method: "POST", body: JSON.stringify(body) }),
+  ytdlp: {
+    status: () => request<YtdlpStatus>("/api/ytdlp"),
+    check: () => request<YtdlpStatus>("/api/ytdlp/check", { method: "POST" }),
+    update: (version?: string) =>
+      request<{ accepted: boolean }>("/api/ytdlp/update", {
+        method: "POST",
+        body: JSON.stringify({ version }),
+      }),
+    rollback: () => request<YtdlpStatus>("/api/ytdlp/rollback", { method: "POST" }),
+    settings: (body: { channel?: string; auto_update?: boolean }) =>
+      request<YtdlpStatus>("/api/ytdlp/settings", { method: "PUT", body: JSON.stringify(body) }),
+  },
   markSeen: () => request<{ updated: number }>("/api/jobs/mark-seen", { method: "POST" }),
 };

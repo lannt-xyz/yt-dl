@@ -15,6 +15,8 @@ class Settings:
     ffmpeg_bin: str = "ffmpeg"
     ffprobe_bin: str = "ffprobe"
     static_dir: Path | None = None
+    update_check_hours: float = 24.0
+    smoke_url: str | None = "https://www.youtube.com/watch?v=jNQXAC9IVRw"
 
     @property
     def db_path(self) -> Path:
@@ -23,6 +25,10 @@ class Settings:
     @property
     def audio_dir(self) -> Path:
         return self.data_dir / "audio"
+
+    @property
+    def ytdlp_dir(self) -> Path:
+        return self.data_dir / "ytdlp"
 
     def ensure_dirs(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -38,4 +44,7 @@ class Settings:
             ffmpeg_bin=os.environ.get("YT_FFMPEG", "ffmpeg"),
             ffprobe_bin=os.environ.get("YT_FFPROBE", "ffprobe"),
             static_dir=Path(static).resolve() if static else None,
+            update_check_hours=float(os.environ.get("YT_UPDATE_CHECK_HOURS", "24")),
+            smoke_url=os.environ.get("YT_SMOKE_URL", "https://www.youtube.com/watch?v=jNQXAC9IVRw")
+            or None,
         )

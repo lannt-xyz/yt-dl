@@ -2,10 +2,12 @@ import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { vi } from "vitest";
 import type { Job } from "../api/types";
+import { EventsProvider } from "../state/events";
 import { JobsProvider } from "../state/jobs";
 import { PlayerProvider } from "../state/player";
 import { ToastProvider } from "../state/toast";
 import { TrimProvider } from "../state/trim";
+import { YtdlpProvider } from "../state/ytdlp";
 
 type Listener = (e: MessageEvent<string>) => void;
 
@@ -73,11 +75,15 @@ export function mockApi(initial: Job[] = [], handler?: Handler) {
 export function renderApp(ui: ReactElement) {
   return render(
     <ToastProvider>
-      <PlayerProvider>
-        <JobsProvider>
-          <TrimProvider>{ui}</TrimProvider>
-        </JobsProvider>
-      </PlayerProvider>
+      <EventsProvider>
+        <PlayerProvider>
+          <JobsProvider>
+            <YtdlpProvider>
+              <TrimProvider>{ui}</TrimProvider>
+            </YtdlpProvider>
+          </JobsProvider>
+        </PlayerProvider>
+      </EventsProvider>
     </ToastProvider>,
   );
 }

@@ -126,6 +126,9 @@ export function TrimSheet({ job, onClose }: { job: Job; onClose: () => void }) {
     const audio = audioRef.current;
     if (audio) audio.currentTime = t;
     setPlayhead(t);
+    // Đang "nghe thử đoạn chọn" mà người dùng tua ra ngoài đoạn → thôi giới hạn, để họ nghe chỗ họ chọn
+    const r = rangeRef.current;
+    if (previewing.current && (t < r.start || t > r.end)) previewing.current = false;
   }, []);
 
   const togglePlay = useCallback(() => {
@@ -292,6 +295,9 @@ export function TrimSheet({ job, onClose }: { job: Job; onClose: () => void }) {
                   <span>{formatTimeMs((view.from + view.to) / 2)}</span>
                   <span>{formatTimeMs(view.to)}</span>
                 </div>
+                <p className="mt-1.5 px-1 text-xs text-muted">
+                  Chạm hoặc kéo trên sóng âm để chọn chỗ nghe · kéo hai núm tím ở đầu và cuối để chỉnh điểm cắt
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">

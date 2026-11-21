@@ -133,11 +133,16 @@ jobs:
 
       - name: Kiểm tra secrets Docker Hub
         id: cfg
+        env:
+          ALL_SECRETS: ${{ toJSON(secrets) }}
         run: |
           if [ "$HAS_DOCKERHUB" = "true" ]; then
             echo "push=true" >> "$GITHUB_OUTPUT"
             echo "platforms=linux/amd64,linux/arm64" >> "$GITHUB_OUTPUT"
           else
+            # Chỉ in TÊN các secret job nhìn thấy (không bao giờ in giá trị) để dễ phát hiện đặt sai tên/sai nơi lưu
+            names="$(printf '%s' "$ALL_SECRETS" | jq -r 'del(.github_token) | keys | join(", ")')"
+            echo "::warning::Secrets job nhìn thấy (chỉ tên): [${names:-không có}]. Cần có đúng DOCKERHUB_USERNAME và DOCKERHUB_TOKEN."
             echo "::warning::Thiếu secrets DOCKERHUB_USERNAME / DOCKERHUB_TOKEN (trong environment PERSONAL hoặc cấp repo) nên chỉ build thử, không đẩy image."
             echo "push=false" >> "$GITHUB_OUTPUT"
             echo "platforms=linux/amd64" >> "$GITHUB_OUTPUT"

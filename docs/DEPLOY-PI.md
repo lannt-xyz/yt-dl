@@ -29,9 +29,15 @@ Sửa `.env`:
 | `YT_DATA_HOST_DIR` | Thư mục dữ liệu trên SSD, ví dụ `/mnt/ssd/yt-mp3` |
 | `YT_RETENTION_DAYS` / `YT_MAX_STORAGE_GB` | Tự dọn file cũ / giới hạn dung lượng |
 
+Có hai cách lấy image:
+
+- **Dùng image dựng sẵn trên Docker Hub** (nhanh, khuyến nghị): `docker compose pull && docker compose up -d`
+  (image `lanntxyz/yt-dl`, có sẵn cho amd64 và arm64).
+- **Tự build trên Pi** từ source: `docker compose up -d --build` (lần đầu 5–10 phút).
+
 ```bash
 mkdir -p /mnt/ssd/yt-mp3 && sudo chown 10001:10001 /mnt/ssd/yt-mp3   # user trong container
-docker compose up -d --build
+docker compose pull && docker compose up -d     # hoặc: docker compose up -d --build
 docker compose ps        # STATUS phải là "healthy"
 docker compose logs -f app
 ```
@@ -85,7 +91,7 @@ nút **Dán** trong app, hoặc **Phím tắt (Shortcuts)** — tạo token tron
 | Việc | Cách làm |
 |---|---|
 | Cập nhật yt-dlp | Trong app: Cài đặt → yt-dlp (có thể bật tự động). Không cần restart, có nút quay lại bản trước. |
-| Cập nhật app | `git pull && docker compose up -d --build` |
+| Cập nhật app | `git pull && docker compose pull && docker compose up -d` (hoặc `up -d --build` để tự build) |
 | Xem log | `docker compose logs -f app` |
 | Sao lưu | App tự sao lưu DB mỗi ngày vào `data/backups/` (giữ 7 bản). Chép thư mục đó ra nơi khác định kỳ. Thủ công: `docker compose exec app python scripts/backup_db.py` |
 | Khôi phục | Dừng app, chép một file `data/backups/app-*.db` thành `data/app.db`, bật lại |
@@ -109,3 +115,23 @@ nút **Dán** trong app, hoặc **Phím tắt (Shortcuts)** — tạo token tron
   giới hạn thử sai, token API chỉ lưu bản băm và hiển thị đúng một lần.
 - App chỉ nhận link video YouTube (không tải URL tùy ý) và chỉ gửi push tới dịch vụ push của trình duyệt.
 - Container chạy bằng user không phải root, dữ liệu nằm ở volume riêng.
+
+## 7. Phát hành image lên Docker Hub (GitHub Actions)
+
+Workflow `CI` (job `docker`) tự build image đa kiến trúc `linux/amd64` + `linux/arm64` và đẩy lên
+**`lanntxyz/yt-dl`** khi:
+
+| Sự kiện | Tag được đẩy |
+|---|---|
+| push lên `main` | `latest`, `sha-<7 ký tự>` |
+| push tag `v1.2.3` | `1.2.3`, `1.2`, `sha-<7 ký tự>` |
+| push nhánh khác / pull request | chỉ build thử (amd64), **không đẩy** |
+
+Cấu hình một lần: Docker Hub → Account settings → Security → **New Access Token** (quyền *Read & Write*), rồi trong
+GitHub repo → Settings → Secrets and variables → Actions thêm:
+
+- `DOCKERHUB_USERNAME` = `lanntxyz`
+- `DOCKERHUB_TOKEN` = token vừa tạo
+
+Chưa có secrets thì job vẫn chạy nhưng chỉ build thử và in cảnh báo. Phát hành bản có số version:
+`git tag v1.0.0 && git push origin v1.0.0`. Build arm64 qua QEMU mất khoảng 10–20 phút (có cache).

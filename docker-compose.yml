@@ -3,7 +3,8 @@
 services:
   app:
     build: .
-    image: yt-mp3-web:latest
+    # Image dựng sẵn trên Docker Hub (docker compose pull); `up -d --build` vẫn tự build từ source và gán đúng tên này
+    image: lanntxyz/yt-dl:${YT_IMAGE_TAG:-latest}
     container_name: yt-mp3-web
     restart: unless-stopped
     env_file: .env

@@ -94,8 +94,8 @@ test("kéo tay cầm cắt bằng con trỏ cảm ứng/chuột thật, tay cầ
   const mid = box.y + box.height / 2;
 
   const end = trim.getByRole("slider", { name: "Điểm kết thúc" });
-  const eb = (await end.boundingBox())!;
-  await page.mouse.move(eb.x + eb.width / 2, mid);
+  const eb = (await trim.locator('[data-grip="end"]').boundingBox())!;
+  await page.mouse.move(eb.x + eb.width / 2, eb.y + eb.height / 2); // núm cuối nằm ở đáy sóng âm
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.5, mid, { steps: 8 });
   await page.mouse.up();
@@ -104,8 +104,8 @@ test("kéo tay cầm cắt bằng con trỏ cảm ứng/chuột thật, tay cầ
   expect(endValue).toBeLessThan(18); // ~giữa bài 30s
 
   const start = trim.getByRole("slider", { name: "Điểm bắt đầu" });
-  const sb = (await start.boundingBox())!;
-  await page.mouse.move(sb.x + sb.width / 2, mid);
+  const sb = (await trim.locator('[data-grip="start"]').boundingBox())!;
+  await page.mouse.move(sb.x + sb.width / 2, sb.y + sb.height / 2); // núm đầu nằm ở đỉnh sóng âm
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.2, mid, { steps: 8 });
   await page.mouse.up();
@@ -113,4 +113,41 @@ test("kéo tay cầm cắt bằng con trỏ cảm ứng/chuột thật, tay cầ
   expect(startValue).toBeGreaterThan(4);
   expect(startValue).toBeLessThan(8);
   await expect(trim.getByText("Độ dài đoạn cắt:")).toBeVisible();
+});
+
+test("kéo trên sóng âm để chọn chỗ nghe: chỉ di chuyển con trỏ phát, KHÔNG đổi điểm cắt", async ({ page }) => {
+  await openHistory(page);
+  await cardFor(page, ID).getByRole("button", { name: "Cắt" }).click();
+  const trim = page.getByRole("dialog", { name: /cắt audio/i });
+  await expect(trim.getByRole("slider", { name: "Điểm bắt đầu" })).toBeVisible();
+  const box = (await trim.getByTestId("waveform").boundingBox())!;
+  const mid = box.y + box.height / 2;
+  const readPos = async () => {
+    const m = /(\d+):(\d+(?:\.\d+)?)/.exec((await trim.getByText(/Vị trí phát/).textContent())!)!;
+    return Number(m[1]) * 60 + Number(m[2]);
+  };
+
+  // đặt đoạn cắt 5s → 25s để hai tay cầm nằm giữa sóng âm
+  for (const [label, value] of [["Bắt đầu", "0:05"], ["Kết thúc", "0:25"]]) {
+    const input = trim.getByLabel(label, { exact: true });
+    await input.fill(value);
+    await input.press("Enter");
+  }
+  const startBefore = await trim.getByRole("slider", { name: "Điểm bắt đầu" }).getAttribute("aria-valuenow");
+  const endBefore = await trim.getByRole("slider", { name: "Điểm kết thúc" }).getAttribute("aria-valuenow");
+
+  // kéo ngay SÁT tay cầm đầu (5s ≈ 17% chiều rộng), ở giữa chiều cao → phải là tua, không phải kéo tay cầm
+  const startX = box.x + (box.width * 5) / 30;
+  await page.mouse.move(startX, mid);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.6, mid, { steps: 10 });
+  await page.mouse.up();
+
+  expect(Math.abs((await readPos()) - 18)).toBeLessThan(0.6); // ~60% của 30s
+  expect(await trim.getByRole("slider", { name: "Điểm bắt đầu" }).getAttribute("aria-valuenow")).toBe(startBefore);
+  expect(await trim.getByRole("slider", { name: "Điểm kết thúc" }).getAttribute("aria-valuenow")).toBe(endBefore);
+
+  // chạm một chỗ khác: con trỏ nhảy tới đó
+  await page.mouse.click(box.x + box.width * 0.1, mid);
+  expect(Math.abs((await readPos()) - 3)).toBeLessThan(0.6);
 });

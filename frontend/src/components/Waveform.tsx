@@ -1,5 +1,13 @@
 import clsx from "clsx";
-import { type KeyboardEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type PointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import {
   type Range,
@@ -104,22 +112,40 @@ export function Waveform({ peaks, peaksPerSecond, duration, range, view, playhea
   const apply = (which: Which, time: number, commit: boolean) =>
     onChange(which === "start" ? setStart(range, time, duration) : setEnd(range, time, duration), commit);
 
-  const onPointerDown = (which: Which) => (e: PointerEvent<HTMLDivElement>) => {
+  // Chỉ "núm" ở đầu/cuối tay cầm mới kéo được điểm cắt. Phần còn lại của sóng âm (kể cả sát tay cầm)
+  // dùng để chọn vị trí nghe: chạm = nhảy tới, kéo = tua.
+  const onGripDown = (which: Which) => (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
-    e.currentTarget.focus();
+    e.currentTarget.parentElement?.focus();
     drag.current = { which, moved: false };
   };
-  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+  const onGripMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag.current) return;
     drag.current.moved = true;
     apply(drag.current.which, timeAt(e.clientX), false);
   };
-  const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
+  const onGripUp = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag.current) return;
     const { which } = drag.current;
     drag.current = null;
     apply(which, timeAt(e.clientX), true);
+  };
+
+  const scrubbing = useRef(false);
+  const seekAt = (clientX: number) => onSeek(clamp(timeAt(clientX), 0, duration));
+  const onTrackDown = (e: PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("[data-grip]")) return;
+    scrubbing.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    seekAt(e.clientX);
+  };
+  const onTrackMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (scrubbing.current) seekAt(e.clientX);
+  };
+  const onTrackUp = () => {
+    scrubbing.current = false;
   };
 
   const onKeyDown = (which: Which) => (e: KeyboardEvent<HTMLDivElement>) => {
@@ -143,23 +169,28 @@ export function Waveform({ peaks, peaksPerSecond, duration, range, view, playhea
       aria-valuenow={Math.round((which === "start" ? range.start : range.end) * 1000) / 1000}
       aria-valuetext={formatTimeMs(which === "start" ? range.start : range.end)}
       data-handle={which}
-      onPointerDown={onPointerDown(which)}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
       onKeyDown={onKeyDown(which)}
-      style={{ left: `${pct}%`, touchAction: "none" }}
-      className="group absolute top-0 z-10 h-full w-11 -translate-x-1/2 cursor-ew-resize outline-none"
+      style={{ left: `${pct}%` }}
+      className="group pointer-events-none absolute top-0 z-10 h-full w-11 -translate-x-1/2 outline-none"
     >
       <span className="absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2 rounded-full bg-accent group-focus-visible:w-1" />
-      <span
+      {/* vùng chạm 44×44 chỉ nằm ở đầu (điểm bắt đầu) hoặc cuối (điểm kết thúc) của tay cầm */}
+      <div
+        data-grip={which}
+        onPointerDown={onGripDown(which)}
+        onPointerMove={onGripMove}
+        onPointerUp={onGripUp}
+        onPointerCancel={onGripUp}
+        style={{ touchAction: "none" }}
         className={clsx(
-          "absolute left-1/2 grid h-7 w-5 -translate-x-1/2 place-items-center rounded-md bg-accent text-accent-ink shadow-md",
+          "pointer-events-auto absolute left-0 grid h-11 w-11 cursor-ew-resize place-items-center",
           which === "start" ? "top-0" : "bottom-0",
         )}
       >
-        <span className="h-3 w-px bg-accent-ink/70" />
-      </span>
+        <span className="grid h-7 w-5 place-items-center rounded-md bg-accent text-accent-ink shadow-md">
+          <span className="h-3 w-px bg-accent-ink/70" />
+        </span>
+      </div>
     </div>
   );
 
@@ -172,11 +203,11 @@ export function Waveform({ peaks, peaksPerSecond, duration, range, view, playhea
       <div
         ref={boxRef}
         data-testid="waveform"
-        className="absolute inset-y-0 right-[18px] left-[18px]"
-        onClick={(e) => {
-          if ((e.target as HTMLElement).closest("[data-handle]")) return;
-          onSeek(clamp(timeAt(e.clientX), 0, duration));
-        }}
+        className="absolute inset-y-0 right-[18px] left-[18px] cursor-pointer"
+        onPointerDown={onTrackDown}
+        onPointerMove={onTrackMove}
+        onPointerUp={onTrackUp}
+        onPointerCancel={onTrackUp}
       >
         <canvas ref={canvasRef} className="absolute inset-0 size-full" aria-hidden="true" />
         <div className="pointer-events-none absolute inset-y-0 left-0 bg-bg/60" style={{ width: `${startPct}%` }} />
@@ -184,9 +215,11 @@ export function Waveform({ peaks, peaksPerSecond, duration, range, view, playhea
         {playVisible && (
           <div
             data-testid="playhead"
-            className="pointer-events-none absolute inset-y-0 w-0.5 bg-ink/80"
+            className="pointer-events-none absolute inset-y-0 z-[5] w-0.5 -translate-x-1/2 bg-ink/80"
             style={{ left: `${playPct}%` }}
-          />
+          >
+            <span className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink ring-2 ring-surface" />
+          </div>
         )}
         {handle("start", startPct, "Điểm bắt đầu")}
         {handle("end", endPct, "Điểm kết thúc")}

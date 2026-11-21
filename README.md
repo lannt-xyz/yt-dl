@@ -13,4 +13,15 @@ make test-network     # gọi YouTube thật
 
 Cấu hình qua biến môi trường: `YT_DATA_DIR` (mặc định `data/`), `YT_CONCURRENCY` (1), `YT_DEFAULT_BITRATE` (192), `YT_STATIC_DIR` (thư mục frontend đã build).
 
+## Frontend (Vite + React + Tailwind)
+
+```bash
+cd frontend && npm install
+make dev-frontend     # http://localhost:5173 (proxy /api → :8000, chạy kèm make dev-backend)
+make test-frontend
+make serve            # build + chạy 1 cổng duy nhất tại :8000
+```
+
+Mobile-first (iPhone/iPad là chính), dark/light theo hệ thống. Mở `/?url=<link>` để tự thêm link vào hàng đợi.
+
 `download.py` ở thư mục gốc là CLI gốc, vẫn dùng được độc lập.

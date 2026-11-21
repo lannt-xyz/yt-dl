@@ -7,12 +7,12 @@
   --surface-2: #f0f1f7;
   --border: #e3e5ee;
   --text: #14161f;
-  --muted: #6a6f85;
-  --accent: #6d5efc;
+  --muted: #5a5f76;
+  --accent: #5b4cf0;
   --accent-contrast: #ffffff;
   --accent-soft: #ecebff;
   --success: #16a34a;
-  --danger: #dc2626;
+  --danger: #b91c1c;
   --warn: #d97706;
   color-scheme: light;
 }

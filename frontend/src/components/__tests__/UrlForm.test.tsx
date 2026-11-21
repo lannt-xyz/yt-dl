@@ -99,3 +99,26 @@ it("nút dán đọc clipboard và tự gửi khi là link YouTube", async () =>
   await userEvent.click(screen.getByRole("button", { name: "Dán từ clipboard" }));
   await waitFor(() => expect(posts(calls)).toHaveLength(1));
 });
+
+
+it("gõ link mới trong lúc lần gửi trước còn đang chờ: không bị xóa mất", async () => {
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((r) => (release = r));
+  const job = makeJob({ status: "queued" });
+  mockApi([], (c) => (c.method === "POST" ? { status: 201, body: job } : undefined));
+  const real = globalThis.fetch;
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") await gate; // giữ response POST lại
+    return real(input, init);
+  });
+  renderApp(<UrlForm />);
+  const input = screen.getByLabelText("Link YouTube");
+  await userEvent.type(input, VALID);
+  await userEvent.click(screen.getByRole("button", { name: /thêm vào hàng đợi/i }));
+
+  await userEvent.clear(input);
+  await userEvent.type(input, "https://youtu.be/9bZkp7q19f0");
+  release?.();
+  expect(await screen.findByText("Đã thêm vào hàng đợi")).toBeInTheDocument();
+  expect(input).toHaveValue("https://youtu.be/9bZkp7q19f0");
+});

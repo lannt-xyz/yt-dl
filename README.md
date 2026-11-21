@@ -1,6 +1,6 @@
 # YouTube → MP3
 
-Web app cá nhân: dán URL YouTube → chuyển MP3 → trim ngay trên web. Kế hoạch chi tiết: [plans/00-baseline-plan.md](plans/00-baseline-plan.md).
+Web app cá nhân: dán URL YouTube → chuyển MP3 → trim ngay trên web. Kế hoạch: [plans/00-baseline-plan.md](plans/00-baseline-plan.md) · Trạng thái và checklist nghiệm thu: [plans/01-implementation-status.md](plans/01-implementation-status.md).
 
 ## Backend (FastAPI)
 
@@ -23,6 +23,17 @@ make serve            # build + chạy 1 cổng duy nhất tại :8000
 ```
 
 Mobile-first (iPhone/iPad là chính), dark/light theo hệ thống. Mở `/?url=<link>` để tự thêm link vào hàng đợi.
+
+## Kiểm thử
+
+```bash
+make check      # lint + toàn bộ unit test (backend + frontend)
+make e2e        # Playwright: iPhone / iPad dọc+ngang / desktop, PWA, đăng nhập, trợ năng (axe)
+make test-network   # gọi YouTube thật (tải + cài yt-dlp vào venv thật)
+```
+
+E2E chạy với downloader giả (`YT_FAKE_DOWNLOADER=1`, chỉ dành cho test) nên ổn định và không cần mạng.
+CI (`.github/workflows`) chạy lint, unit test, E2E và build Docker mỗi lần push; hằng tuần có job thử tải thật với yt-dlp mới nhất.
 
 ## PWA và thông báo
 

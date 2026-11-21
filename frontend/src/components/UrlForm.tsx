@@ -56,14 +56,15 @@ export function UrlForm() {
       setBusy(false);
       switch (res.kind) {
         case "created":
-          setValue("");
+          // người dùng có thể đã gõ link khác trong lúc chờ: chỉ xóa nếu ô vẫn là link vừa gửi
+          setValue((cur) => (cur === raw ? "" : cur));
           toast.push({ tone: "info", title: "Đã thêm vào hàng đợi", text: "Sẽ báo cho bạn khi tải xong." });
           break;
         case "duplicate":
           setDuplicate({ url, job: res.job });
           break;
         case "already_queued":
-          setValue("");
+          setValue((cur) => (cur === raw ? "" : cur));
           toast.push({ tone: "info", title: "Video này đang trong hàng đợi" });
           break;
         case "error":

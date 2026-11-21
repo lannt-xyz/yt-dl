@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { YtdlpStatus } from "../../api/client";
 import { makeJob } from "../../test/factories";
@@ -50,7 +50,11 @@ it("hết bản mới thì nút Cập nhật bị khóa", async () => {
 
 it("bấm Cập nhật gửi yêu cầu, rồi SSE báo hoàn tất thì hiện version mới và toast", async () => {
   const state = { current: status() };
-  const { calls } = ytdlpApi(state, (c) => (c.url === "/api/ytdlp/update" ? { status: 202, body: { accepted: true } } : undefined));
+  const { calls } = ytdlpApi(state, (c) => {
+    if (c.url !== "/api/ytdlp/update") return undefined;
+    state.current = status({ updating: true }); // server đã bắt đầu cập nhật
+    return { status: 202, body: { accepted: true } };
+  });
   renderApp(<SettingsSheet onClose={() => {}} />);
   await screen.findByTestId("ytdlp-version");
   await userEvent.click(screen.getByRole("button", { name: /cập nhật$/i }));
@@ -143,4 +147,18 @@ describe("job lỗi needs_update", () => {
     const alert = screen.getByRole("alert");
     expect(within(alert).getByText("riêng tư")).toBeInTheDocument();
   });
+});
+
+
+it("hai sự kiện ytdlp tới liên tiếp (đang cập nhật → xong) vẫn hiện toast thành công", async () => {
+  ytdlpApi({ current: status() });
+  renderApp(<SettingsSheet onClose={() => {}} />);
+  await screen.findByTestId("ytdlp-version");
+  const done = status({ version: "2026.11.01", source: "venv", update_available: false });
+  const source = FakeEventSource.latest();
+  act(() => {
+    source.emit("ytdlp", { type: "ytdlp", status: status({ updating: true }) });
+    source.emit("ytdlp", { type: "ytdlp", status: done }); // cùng một tick, trước khi React render lại
+  });
+  expect(await screen.findByText("Đã cập nhật yt-dlp")).toBeInTheDocument();
 });

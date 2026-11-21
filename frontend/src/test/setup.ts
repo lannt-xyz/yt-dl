@@ -18,3 +18,12 @@ Object.defineProperty(window.HTMLMediaElement.prototype, "load", {
   configurable: true,
   value: () => undefined,
 });
+
+// mỗi test bắt đầu với localStorage sạch (bitrate đã chọn, trạng thái đăng nhập đã nhớ...)
+afterEach(() => {
+  try {
+    localStorage.clear();
+  } catch {
+    /* bỏ qua */
+  }
+});

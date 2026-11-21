@@ -84,8 +84,8 @@ it("nút nhích và Hoàn tác", async () => {
   const undo = screen.getByRole("button", { name: "Hoàn tác" });
   expect(undo).toBeDisabled();
 
-  await userEvent.click(screen.getByRole("button", { name: "Bắt đầu +1 giây" }));
-  await userEvent.click(screen.getByRole("button", { name: "Bắt đầu +1 giây" }));
+  await userEvent.click(screen.getByRole("button", { name: "Bắt đầu +1s" }));
+  await userEvent.click(screen.getByRole("button", { name: "Bắt đầu +1s" }));
   expect(screen.getByRole("slider", { name: "Điểm bắt đầu" })).toHaveAttribute("aria-valuenow", "2");
   expect(undo).toBeEnabled();
 

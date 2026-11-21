@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AuthContext, AuthProvider } from "../../state/auth";
+import { AuthContext, AuthProvider, useAuth } from "../../state/auth";
 import { ToastProvider } from "../../state/toast";
 import { makeJob } from "../../test/factories";
 import { type Call, mockApi, renderApp } from "../../test/utils";
@@ -14,6 +14,15 @@ type Resp = { status?: number; body?: unknown } | undefined;
 
 function setup(handler: (c: Call) => Resp) {
   return mockApi([], handler);
+}
+
+function LogoutProbe() {
+  const { logout } = useAuth();
+  return (
+    <button type="button" onClick={() => void logout()}>
+      đăng-xuất
+    </button>
+  );
 }
 
 function renderAuth(ui = <div>NỘI DUNG APP</div>) {
@@ -98,6 +107,33 @@ describe("AuthProvider / màn hình đăng nhập", () => {
     fail = false;
     await userEvent.click(screen.getByRole("button", { name: "Thử lại" }));
     expect(await screen.findByText("NỘI DUNG APP")).toBeInTheDocument();
+  });
+
+  it("mất mạng nhưng lần trước đã vào được: vẫn mở app shell (không hiện màn hình lỗi)", async () => {
+    setup((c) => (c.url === "/api/auth/status" ? { body: { required: true, authenticated: true } } : undefined));
+    const first = renderAuth();
+    expect(await screen.findByText("NỘI DUNG APP")).toBeInTheDocument();
+    first.unmount();
+
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("offline");
+    }));
+    renderAuth();
+    expect(await screen.findByText("NỘI DUNG APP")).toBeInTheDocument();
+    expect(screen.queryByText("Không kết nối được tới máy chủ")).not.toBeInTheDocument();
+  });
+
+  it("đăng xuất xóa trạng thái đã nhớ: lần sau mất mạng thì hiện lỗi, không lọt vào app", async () => {
+    setup((c) => (c.url === "/api/auth/status" ? { body: { required: true, authenticated: true } } : undefined));
+    const first = renderAuth(<LogoutProbe />);
+    await userEvent.click(await screen.findByRole("button", { name: "đăng-xuất" }));
+    await screen.findByLabelText("Mật khẩu");
+    first.unmount();
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("offline");
+    }));
+    renderAuth();
+    expect(await screen.findByText("Không kết nối được tới máy chủ")).toBeInTheDocument();
   });
 
   it("phiên hết hạn giữa chừng (401) → quay về màn hình đăng nhập", async () => {

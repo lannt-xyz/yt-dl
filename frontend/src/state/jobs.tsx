@@ -87,7 +87,8 @@ export function JobsProvider({ children }: { children: ReactNode }) {
     async (url, opts) => {
       try {
         const job = await api.createJob(url, opts);
-        upsert(job);
+        // job nhanh có thể đã xong và được SSE báo trước khi response POST về → đừng ghi đè bằng bản cũ
+        if (!stateRef.current[job.id]) upsert(job);
         return { kind: "created", job };
       } catch (e) {
         if (e instanceof ApiError) {

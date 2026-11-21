@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { makeJob } from "../../test/factories";
 import { FakeEventSource, mockApi, renderApp } from "../../test/utils";
 import { JobCard } from "../JobCard";
+import { useJobs } from "../../state/jobs";
 import { QueueSection } from "../Sections";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -77,4 +78,36 @@ it("SSE: sự kiện deleted gỡ job khỏi danh sách", async () => {
   expect(await screen.findByText("Sắp bị xóa")).toBeInTheDocument();
   FakeEventSource.latest().emit("deleted", { type: "deleted", id: job.id });
   await waitFor(() => expect(screen.queryByText("Sắp bị xóa")).not.toBeInTheDocument());
+});
+
+
+it("job xong nhanh: SSE 'done' tới trước response POST thì không bị ghi đè về 'queued'", async () => {
+  const queued = makeJob({ status: "queued", title: "Job nhanh" });
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((r) => (release = r));
+  mockApi([], (c) => (c.method === "POST" ? { status: 201, body: queued } : undefined));
+  const real = globalThis.fetch;
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") await gate;
+    return real(input, init);
+  });
+
+  function Probe() {
+    const { submit, jobs } = useJobs();
+    return (
+      <div>
+        <button type="button" onClick={() => void submit("https://youtu.be/dQw4w9WgXcQ")}>
+          gửi
+        </button>
+        <p data-testid="status">{jobs.map((j) => j.status).join(",")}</p>
+      </div>
+    );
+  }
+  renderApp(<Probe />);
+  await userEvent.click(screen.getByRole("button", { name: "gửi" }));
+  FakeEventSource.latest().emit("job", { type: "job", job: { ...queued, status: "done", progress: 100 } });
+  await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("done"));
+  release?.();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(screen.getByTestId("status")).toHaveTextContent("done");
 });

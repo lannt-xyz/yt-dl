@@ -50,6 +50,7 @@ export function YtdlpProvider({ children }: { children: ReactNode }) {
   useEvent("ytdlp", (data) => {
     const ev = data as { status: YtdlpStatus; error?: string | null };
     const before = statusRef.current;
+    statusRef.current = ev.status; // cập nhật ngay: hai sự kiện liên tiếp có thể tới trước khi React render lại
     setStatus(ev.status);
     if (ev.error) {
       toast.push({ tone: "error", title: "Cập nhật yt-dlp thất bại", text: ev.error });
@@ -97,7 +98,7 @@ export function YtdlpProvider({ children }: { children: ReactNode }) {
       update: async (version) => {
         const res = await guard(() => api.ytdlp.update(version), "Không bắt đầu được cập nhật");
         if (!res) return false;
-        setStatus((s) => (s ? { ...s, updating: true } : s));
+        await load(); // lấy trạng thái thật (cập nhật có thể đã xong trước khi response này về)
         return true;
       },
       rollback: async () => {
@@ -132,7 +133,7 @@ export function YtdlpProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [status, busy, guard, waitIdle, toast],
+    [status, busy, guard, waitIdle, toast, load],
   );
 
   return <YtdlpContext.Provider value={value}>{children}</YtdlpContext.Provider>;

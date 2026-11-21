@@ -4,8 +4,9 @@ import { defineConfig } from "@playwright/test";
 // CI dùng Chromium của Playwright (npx playwright install chromium).
 const channel = process.env.PW_CHANNEL || undefined;
 const python = process.env.E2E_PYTHON ?? "python3";
-const PORT = 8801;
-const AUTH_PORT = 8802;
+// Cổng và thư mục dữ liệu theo cổng, để hai lượt chạy (hai terminal/hai phiên làm việc) không dẫm lên nhau.
+const PORT = Number(process.env.E2E_PORT ?? 8801);
+const AUTH_PORT = Number(process.env.E2E_AUTH_PORT ?? PORT + 1);
 
 const serverEnv = (data: string, extra = "") =>
   `rm -rf ${data} && mkdir -p ${data} && YT_FAKE_DOWNLOADER=1 YT_DATA_DIR=${data} YT_STATIC_DIR=dist ` +
@@ -53,15 +54,16 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `sh -c "${serverEnv("e2e/.data")} ${python} -m uvicorn app.main:create_app --factory --app-dir ../backend --port ${PORT}"`,
+      command: `sh -c "${serverEnv(`e2e/.data-${PORT}`)} ${python} -m uvicorn app.main:create_app --factory --app-dir ../backend --port ${PORT}"`,
       url: `http://localhost:${PORT}/api/health`,
-      reuseExistingServer: !process.env.CI,
+      // luôn tự dựng server riêng của lượt chạy này; nếu cổng đang bận thì báo lỗi rõ ràng thay vì dùng chung dữ liệu
+      reuseExistingServer: false,
       timeout: 60_000,
     },
     {
-      command: `sh -c "${serverEnv("e2e/.data-auth", "YT_PASSWORD=e2e-password-123")} ${python} -m uvicorn app.main:create_app --factory --app-dir ../backend --port ${AUTH_PORT}"`,
+      command: `sh -c "${serverEnv(`e2e/.data-${AUTH_PORT}`, "YT_PASSWORD=e2e-password-123")} ${python} -m uvicorn app.main:create_app --factory --app-dir ../backend --port ${AUTH_PORT}"`,
       url: `http://localhost:${AUTH_PORT}/api/health`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 60_000,
     },
   ],

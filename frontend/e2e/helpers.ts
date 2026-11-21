@@ -1,6 +1,7 @@
 import { type APIRequestContext, type Locator, type Page, expect } from "@playwright/test";
 
-export const AUTH_URL = "http://localhost:8802";
+const E2E_PORT = Number(process.env.E2E_PORT ?? 8801);
+export const AUTH_URL = `http://localhost:${Number(process.env.E2E_AUTH_PORT ?? E2E_PORT + 1)}`;
 export const ytUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
 export const titleOf = (id: string) => `Video thử ${id}`;
 

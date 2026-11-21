@@ -12,8 +12,9 @@ interface ToastApi {
 }
 
 const ToastContext = createContext<ToastApi | null>(null);
-const MAX_TOASTS = 4;
-const LIFETIME_MS = 5500;
+const MAX_TOASTS = 3;
+// Toast che một phần màn hình nhỏ và chặn thao tác bên dưới → thông tin thường thì tắt sớm
+const LIFETIME_MS = { info: 3500, success: 5500, error: 7000 } as const;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
@@ -24,7 +25,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (notice, action) => {
       const id = Date.now() + Math.random();
       setItems((l) => [...l.slice(-(MAX_TOASTS - 1)), { ...notice, id, action }]);
-      window.setTimeout(() => dismiss(id), LIFETIME_MS);
+      window.setTimeout(() => dismiss(id), LIFETIME_MS[notice.tone]);
     },
     [dismiss],
   );

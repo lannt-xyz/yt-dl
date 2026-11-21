@@ -22,6 +22,7 @@ class Settings:
     ffprobe_bin: str = "ffprobe"
     static_dir: Path | None = None
     update_check_hours: float = 24.0
+    fake_downloader: bool = False  # chỉ cho E2E
     password: str | None = None
     password_hash: str | None = None
     session_days: int = 30
@@ -79,6 +80,7 @@ class Settings:
             ffprobe_bin=os.environ.get("YT_FFPROBE", "ffprobe"),
             static_dir=Path(static).resolve() if static else None,
             update_check_hours=float(os.environ.get("YT_UPDATE_CHECK_HOURS", "24")),
+            fake_downloader=os.environ.get("YT_FAKE_DOWNLOADER", "") in ("1", "true"),
             password=os.environ.get("YT_PASSWORD") or None,
             password_hash=os.environ.get("YT_PASSWORD_HASH") or None,
             session_days=int(os.environ.get("YT_SESSION_DAYS", "30")),

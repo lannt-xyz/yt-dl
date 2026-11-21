@@ -32,3 +32,11 @@ test-all: test test-frontend
 # Chạy bản production: backend phục vụ luôn frontend đã build (http://localhost:8000)
 serve: build-frontend
 	YT_STATIC_DIR=frontend/dist $(PY) -m uvicorn app.main:create_app --factory --app-dir backend --host 0.0.0.0 --port 8000
+
+.PHONY: e2e check
+
+# E2E (Playwright). Local dùng Chrome cài sẵn; CI dùng Chromium của Playwright.
+e2e: build-frontend
+	cd frontend && PW_CHANNEL=$${PW_CHANNEL:-chrome} E2E_PYTHON=../$(PY) npx playwright test
+
+check: lint test-all

@@ -40,8 +40,14 @@ def create_app(
         repo = JobRepo(db)
         broker = EventBroker()
         broker.bind_loop(asyncio.get_running_loop())
-        manager = YtDlpManager(settings.ytdlp_dir, smoke_url=settings.smoke_url)
-        dl = downloader or SubprocessDownloader(manager)
+        if settings.fake_downloader:
+            from .testing import FakeE2EDownloader, fake_manager
+
+            manager = fake_manager(settings.ytdlp_dir)
+            dl = downloader or FakeE2EDownloader(manager, settings.ffmpeg_bin)
+        else:
+            manager = YtDlpManager(settings.ytdlp_dir, smoke_url=settings.smoke_url)
+            dl = downloader or SubprocessDownloader(manager)
         notifier = push_notifier or PushNotifier(
             db, settings.vapid_key_path, subject=settings.vapid_subject,
             extra_hosts=settings.push_extra_hosts,
@@ -112,6 +118,16 @@ def create_app(
     app.include_router(jobs.router, dependencies=protected)
     app.include_router(ytdlp.router, dependencies=protected)
     app.include_router(push.router, dependencies=protected)
+    if settings.fake_downloader:  # endpoint dọn trạng thái, chỉ tồn tại trong chế độ E2E
+
+        @app.post("/api/_test/reset", dependencies=protected)
+        async def _reset() -> dict[str, bool]:
+            from .testing import reset_state
+
+            reset_state(settings, app.state.repo, app.state.ytdlp)
+            app.state.broker.publish({"type": "reset"})
+            return {"ok": True}
+
     _mount_frontend(app, settings.static_dir)
     return app
 

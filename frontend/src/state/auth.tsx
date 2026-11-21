@@ -13,6 +13,26 @@ import { ApiError, api, setUnauthorizedHandler } from "../api/client";
 
 type Phase = "loading" | "login" | "ready" | "error";
 
+const KNOWN_KEY = "yt-mp3:auth-known"; // "1" = lần trước đã vào được app (kèm yêu cầu đăng nhập hay không)
+
+function readKnown(): { signedIn: boolean; required: boolean } | null {
+  try {
+    const v = localStorage.getItem(KNOWN_KEY);
+    return v ? { signedIn: true, required: v === "required" } : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeKnown(required: boolean | null) {
+  try {
+    if (required === null) localStorage.removeItem(KNOWN_KEY);
+    else localStorage.setItem(KNOWN_KEY, required ? "required" : "open");
+  } catch {
+    /* chế độ riêng tư: bỏ qua */
+  }
+}
+
 export interface AuthApi {
   /** Server có yêu cầu đăng nhập không (false = chế độ mở). */
   required: boolean;
@@ -34,9 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const s = await api.auth.status();
       setRequired(s.required);
+      writeKnown(s.authenticated ? s.required : null);
       setPhase(s.authenticated ? "ready" : "login");
     } catch {
-      setPhase("error");
+      // Không tới được server (mất mạng/server tắt): nếu lần trước đã vào được app thì vẫn mở app shell
+      // đã cache, các chỗ cần server sẽ tự báo offline. Chưa từng vào thì mới hiện màn hình lỗi.
+      const known = readKnown();
+      if (known) {
+        setRequired(known.required);
+        setPhase("ready");
+      } else {
+        setPhase("error");
+      }
     }
   }, []);
 
@@ -45,7 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [load]);
 
   useEffect(() => {
-    setUnauthorizedHandler(() => setPhase((p) => (p === "ready" ? "login" : p)));
+    setUnauthorizedHandler(() => {
+      writeKnown(null);
+      setPhase((p) => (p === "ready" ? "login" : p));
+    });
     return () => setUnauthorizedHandler(null);
   }, []);
 
@@ -54,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       required,
       logout: async () => {
         await api.auth.logout().catch(() => undefined);
+        writeKnown(null);
         setPhase("login");
       },
     }),

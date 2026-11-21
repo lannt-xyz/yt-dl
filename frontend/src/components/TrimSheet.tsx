@@ -440,8 +440,8 @@ function TimeField({
     <button
       type="button"
       onClick={() => onNudge(delta)}
-      aria-label={`${label} ${delta > 0 ? "+" : "−"}${Math.abs(delta)} giây`}
-      className="grid h-11 min-w-10 place-items-center rounded-lg border border-line bg-surface px-1.5 text-xs font-semibold text-muted active:bg-surface-2"
+      aria-label={`${label} ${text}`}
+      className="grid h-11 min-w-10 place-items-center rounded-lg border border-line bg-surface px-1 text-[11px] font-semibold text-muted active:bg-surface-2"
     >
       {text}
     </button>
@@ -454,7 +454,7 @@ function TimeField({
       </label>
       <div className="mt-2 flex items-center gap-1.5">
         {nudgeBtn(-1, "−1s")}
-        {nudgeBtn(-0.1, "−.1")}
+        {nudgeBtn(-0.1, "−0.1s")}
         <input
           id={id}
           inputMode="decimal"
@@ -478,7 +478,7 @@ function TimeField({
             invalid ? "border-bad" : "border-transparent",
           )}
         />
-        {nudgeBtn(0.1, "+.1")}
+        {nudgeBtn(0.1, "+0.1s")}
         {nudgeBtn(1, "+1s")}
       </div>
       <button

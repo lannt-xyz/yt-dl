@@ -1,0 +1,23 @@
+name: yt-dlp weekly check
+
+# YouTube hay đổi. Mỗi tuần chạy test thật (mạng) với yt-dlp MỚI NHẤT để biết sớm khi nào cần cập nhật/chỉnh code.
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  network:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: pip install -r backend/requirements-dev.txt
+      - name: Nâng yt-dlp lên bản mới nhất
+        run: pip install -U "yt-dlp[default]" && python -c "import yt_dlp.version as v; print('yt-dlp', v.__version__)"
+      - name: Test tải thật (network + cài venv thật)
+        working-directory: backend
+        run: python -m pytest -q -m "network or slow" -p no:cacheprovider

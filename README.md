@@ -24,4 +24,12 @@ make serve            # build + chạy 1 cổng duy nhất tại :8000
 
 Mobile-first (iPhone/iPad là chính), dark/light theo hệ thống. Mở `/?url=<link>` để tự thêm link vào hàng đợi.
 
+## PWA và thông báo
+
+- Cài như app: Chrome/Edge → "Cài đặt ứng dụng"; iPhone/iPad → Safari → Chia sẻ → "Thêm vào MH chính".
+- Web Push (Cài đặt → Thông báo) cần **HTTPS hợp lệ** (hoặc `localhost`). Trên iOS/iPadOS còn phải mở app từ biểu tượng ở Màn hình chính (iOS ≥ 16.4).
+- iOS không có Share Target: dùng nút Dán, hoặc mở `/?url=<link>` (ví dụ từ iOS Shortcut).
+- Khóa VAPID tự sinh tại `data/vapid_private.pem` (đừng commit; xóa file nếu muốn đăng ký lại toàn bộ thiết bị).
+- Sinh lại icon: `cd frontend && node scripts/generate-icons.cjs`.
+
 `download.py` ở thư mục gốc là CLI gốc, vẫn dùng được độc lập.

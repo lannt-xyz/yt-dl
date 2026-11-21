@@ -100,5 +100,18 @@ export const api = {
     settings: (body: { channel?: string; auto_update?: boolean }) =>
       request<YtdlpStatus>("/api/ytdlp/settings", { method: "PUT", body: JSON.stringify(body) }),
   },
+  push: {
+    key: () => request<{ public_key: string }>("/api/push/key"),
+    subscribe: (sub: unknown) =>
+      request<{ subscribed: boolean }>("/api/push/subscribe", { method: "POST", body: JSON.stringify(sub) }),
+    unsubscribe: (endpoint: string) =>
+      request<{ removed: boolean }>("/api/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) }),
+    status: (endpoint: string) =>
+      request<{ subscribed: boolean; devices: number }>("/api/push/status", {
+        method: "POST",
+        body: JSON.stringify({ endpoint }),
+      }),
+    test: () => request<{ sent: number }>("/api/push/test", { method: "POST" }),
+  },
   markSeen: () => request<{ updated: number }>("/api/jobs/mark-seen", { method: "POST" }),
 };

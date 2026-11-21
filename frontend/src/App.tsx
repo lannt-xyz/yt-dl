@@ -1,6 +1,8 @@
 import clsx from "clsx";
 import { AudioLines, Settings, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
+import { PwaUpdater } from "./components/PwaUpdater";
+import { searchOf, tabFromSearch } from "./lib/route";
 import { useMediaQuery } from "./lib/useMediaQuery";
 import { BottomNav, type Tab } from "./components/BottomNav";
 import { MiniPlayer } from "./components/MiniPlayer";
@@ -14,11 +16,23 @@ import { useJobs } from "./state/jobs";
 
 export default function App() {
   const { jobs, unseen, online } = useJobs();
-  const [tab, setTab] = useState<Tab>("download");
+  const [tab, setTab] = useState<Tab>(() => tabFromSearch(window.location.search));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { status: ytdlp } = useYtdlp();
   const desktop = useMediaQuery("(min-width: 1024px)");
   const activeCount = jobs.filter((j) => isActive(j.status)).length;
+
+  // Bấm vào thông báo đẩy khi app đang mở: service worker gửi message để chuyển tab
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "navigate" && typeof e.data.url === "string") {
+        setTab(tabFromSearch(searchOf(e.data.url)));
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, []);
 
   useEffect(() => {
     document.title = unseen > 0 ? `(${unseen}) YT → MP3` : "YT → MP3";
@@ -69,6 +83,7 @@ export default function App() {
         </div>
       </main>
 
+      <PwaUpdater />
       <MiniPlayer />
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
       <BottomNav tab={tab} onChange={setTab} unseen={unseen} active={activeCount} />

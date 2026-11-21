@@ -16,6 +16,8 @@ class Settings:
     ffprobe_bin: str = "ffprobe"
     static_dir: Path | None = None
     update_check_hours: float = 24.0
+    vapid_subject: str = "mailto:admin@example.com"
+    push_extra_hosts: tuple[str, ...] = ()
     smoke_url: str | None = "https://www.youtube.com/watch?v=jNQXAC9IVRw"
 
     @property
@@ -25,6 +27,10 @@ class Settings:
     @property
     def audio_dir(self) -> Path:
         return self.data_dir / "audio"
+
+    @property
+    def vapid_key_path(self) -> Path:
+        return self.data_dir / "vapid_private.pem"
 
     @property
     def ytdlp_dir(self) -> Path:
@@ -45,6 +51,12 @@ class Settings:
             ffprobe_bin=os.environ.get("YT_FFPROBE", "ffprobe"),
             static_dir=Path(static).resolve() if static else None,
             update_check_hours=float(os.environ.get("YT_UPDATE_CHECK_HOURS", "24")),
+            vapid_subject=os.environ.get("YT_VAPID_SUBJECT", "mailto:admin@example.com"),
+            push_extra_hosts=tuple(
+                h.strip().lower()
+                for h in os.environ.get("YT_PUSH_HOSTS", "").split(",")
+                if h.strip()
+            ),
             smoke_url=os.environ.get("YT_SMOKE_URL", "https://www.youtube.com/watch?v=jNQXAC9IVRw")
             or None,
         )

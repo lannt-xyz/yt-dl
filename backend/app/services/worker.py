@@ -28,6 +28,7 @@ class JobWorker:
         broker: EventBroker,
         settings: Settings,
         recovery: Callable[[], bool] | None = None,
+        on_finished: Callable[[dict[str, Any]], None] | None = None,
     ):
         self.repo = repo
         self.downloader = downloader
@@ -35,6 +36,7 @@ class JobWorker:
         self.settings = settings
         # Gọi khi job lỗi "needs_update": True nếu đã chuyển sang yt-dlp mới hơn → tự thử lại 1 lần
         self.recovery = recovery
+        self.on_finished = on_finished  # gọi khi job tải kết thúc (xong/lỗi) — dùng cho push
         self._recovered: set[str] = set()
         self._wake = asyncio.Event()
         self._tasks: list[asyncio.Task[None]] = []
@@ -103,8 +105,13 @@ class JobWorker:
             self.broker.publish({"type": "job", "job": job_to_out(job)})
 
     def _finish(self, job_id: str, **fields: Any) -> None:
-        self.repo.update(job_id, finished_at=time.time(), seen=0, **fields)
+        job = self.repo.update(job_id, finished_at=time.time(), seen=0, **fields)
         self._emit(job_id)
+        if self.on_finished and job:
+            try:
+                self.on_finished(job)
+            except Exception:
+                log.exception("on_finished lỗi cho job %s", job_id)
 
     def _process(self, job_id: str) -> None:
         job = self.repo.get(job_id)

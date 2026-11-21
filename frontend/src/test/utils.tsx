@@ -5,6 +5,7 @@ import type { Job } from "../api/types";
 import { JobsProvider } from "../state/jobs";
 import { PlayerProvider } from "../state/player";
 import { ToastProvider } from "../state/toast";
+import { TrimProvider } from "../state/trim";
 
 type Listener = (e: MessageEvent<string>) => void;
 
@@ -73,7 +74,9 @@ export function renderApp(ui: ReactElement) {
   return render(
     <ToastProvider>
       <PlayerProvider>
-        <JobsProvider>{ui}</JobsProvider>
+        <JobsProvider>
+          <TrimProvider>{ui}</TrimProvider>
+        </JobsProvider>
       </PlayerProvider>
     </ToastProvider>,
   );

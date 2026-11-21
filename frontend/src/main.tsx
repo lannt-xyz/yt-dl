@@ -5,13 +5,16 @@ import "./index.css";
 import { JobsProvider } from "./state/jobs";
 import { PlayerProvider } from "./state/player";
 import { ToastProvider } from "./state/toast";
+import { TrimProvider } from "./state/trim";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ToastProvider>
       <PlayerProvider>
         <JobsProvider>
-          <App />
+          <TrimProvider>
+            <App />
+          </TrimProvider>
         </JobsProvider>
       </PlayerProvider>
     </ToastProvider>

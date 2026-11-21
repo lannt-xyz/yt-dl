@@ -2,3 +2,4 @@ fastapi>=0.115
 uvicorn>=0.30
 yt-dlp[default]==2026.10.26
 packaging>=23
+pywebpush>=2.0

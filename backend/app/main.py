@@ -10,19 +10,24 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 
-from .api import jobs, system, ytdlp
+from .api import jobs, push, system, ytdlp
 from .config import Settings
 from .db import Database
 from .events import EventBroker
 from .repository import JobRepo
 from .services.downloader import Downloader, SubprocessDownloader
+from .services.push import PushNotifier, job_payload
 from .services.worker import JobWorker
 from .services.ytdlp_manager import UpdateError, YtDlpManager
 
 log = logging.getLogger("app")
 
 
-def create_app(settings: Settings | None = None, downloader: Downloader | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    downloader: Downloader | None = None,
+    push_notifier: PushNotifier | None = None,
+) -> FastAPI:
     settings = settings or Settings.from_env()
 
     @asynccontextmanager
@@ -34,9 +39,20 @@ def create_app(settings: Settings | None = None, downloader: Downloader | None =
         broker.bind_loop(asyncio.get_running_loop())
         manager = YtDlpManager(settings.ytdlp_dir, smoke_url=settings.smoke_url)
         dl = downloader or SubprocessDownloader(manager)
+        notifier = push_notifier or PushNotifier(
+            db, settings.vapid_key_path, subject=settings.vapid_subject,
+            extra_hosts=settings.push_extra_hosts,
+        )  # fmt: skip
+
+        def on_finished(job: dict) -> None:
+            payload = job_payload(job)
+            if payload:
+                notifier.notify(payload)
+
         worker = JobWorker(
             repo, dl, broker, settings,
             recovery=lambda: manager.auto_update and manager.update_if_newer(),
+            on_finished=on_finished,
         )  # fmt: skip
 
         recovered = repo.reset_running_to_queued()
@@ -50,6 +66,7 @@ def create_app(settings: Settings | None = None, downloader: Downloader | None =
         app.state.downloader = dl
         app.state.worker = worker
         app.state.ytdlp = manager
+        app.state.push = notifier
         app.state.background_tasks = set()
         await worker.start()
         worker.wake()
@@ -62,6 +79,7 @@ def create_app(settings: Settings | None = None, downloader: Downloader | None =
                 task.cancel()
             await asyncio.gather(checker, return_exceptions=True)
             await worker.stop()
+            notifier.shutdown()
             db.close()
 
     app = FastAPI(title="YouTube → MP3", version="0.1.0", lifespan=lifespan)
@@ -84,6 +102,7 @@ def create_app(settings: Settings | None = None, downloader: Downloader | None =
     app.include_router(system.router)
     app.include_router(jobs.router)
     app.include_router(ytdlp.router)
+    app.include_router(push.router)
     _mount_frontend(app, settings.static_dir)
     return app
 

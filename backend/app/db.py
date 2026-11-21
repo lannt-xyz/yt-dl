@@ -35,6 +35,14 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_video ON jobs(video_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_parent ON jobs(parent_id);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint   TEXT PRIMARY KEY,
+    p256dh     TEXT NOT NULL,
+    auth       TEXT NOT NULL,
+    user_agent TEXT,
+    created_at REAL NOT NULL
+);
 """
 
 

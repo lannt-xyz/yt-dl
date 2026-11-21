@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { ClipboardPaste, Link2, Loader2, Plus } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { Job } from "../api/types";
+import { useBrowserOnline } from "../lib/useOnline";
 import { extractYoutubeUrl, looksLikeYoutubeUrl } from "../lib/youtube";
 import { useJobs } from "../state/jobs";
 import { usePlayer } from "../state/player";
@@ -25,6 +26,7 @@ export function UrlForm() {
   const { submit } = useJobs();
   const toast = useToast();
   const player = usePlayer();
+  const online = useBrowserOnline();
   const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -144,6 +146,11 @@ export function UrlForm() {
             <ClipboardPaste className="size-5" />
           </button>
         </div>
+        {!online && (
+          <p role="status" className="mt-2 rounded-xl bg-warn/15 px-3 py-2 text-sm text-warn">
+            Không có kết nối mạng. Bạn vẫn xem được lịch sử đã tải, nhưng chưa thêm link mới được.
+          </p>
+        )}
         {error && (
           <p id="yt-url-error" role="alert" className="mt-2 text-sm text-bad">
             {error}
@@ -170,7 +177,7 @@ export function UrlForm() {
           </div>
           <button
             type="submit"
-            disabled={busy || !value.trim()}
+            disabled={busy || !value.trim() || !online}
             className="flex h-12 min-w-36 flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-5 font-semibold text-accent-ink transition active:scale-[0.98] disabled:opacity-50 sm:flex-none"
           >
             {busy ? <Loader2 className="size-5 animate-spin" /> : <Plus className="size-5" />}

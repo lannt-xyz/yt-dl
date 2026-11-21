@@ -4,6 +4,7 @@ services:
   app:
     build: .
     image: yt-mp3-web:latest
+    container_name: yt-mp3-web
     restart: unless-stopped
     env_file: .env
     environment:
@@ -11,9 +12,9 @@ services:
     volumes:
       # Nên trỏ tới SSD/USB thay vì thẻ SD (ghi nhiều). Mặc định: thư mục ./data
       - ${YT_DATA_HOST_DIR:-./data}:/data
-    ports:
-      # Chỉ mở trong máy; truy cập từ xa qua Tailscale Serve hoặc Caddy (xem docs/DEPLOY-PI.md)
-      - "127.0.0.1:${YT_PORT:-8000}:8000"
+    # ports:
+    #   # Chỉ mở trong máy; truy cập từ xa qua Tailscale Serve hoặc Caddy (xem docs/DEPLOY-PI.md)
+    #   - "127.0.0.1:${YT_PORT:-8000}:8000"
     mem_limit: 1g
     cpus: 3
     healthcheck:
@@ -27,24 +28,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - shared_network
 
-  caddy:
-    profiles: ["https"]
-    image: caddy:2
-    restart: unless-stopped
-    depends_on:
-      app:
-        condition: service_healthy
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      YT_DOMAIN: ${YT_DOMAIN:-localhost}  # đặt tên miền thật trong .env
-    volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-
-volumes:
-  caddy_data:
-  caddy_config:
+networks:
+  shared_network:
+    external: true

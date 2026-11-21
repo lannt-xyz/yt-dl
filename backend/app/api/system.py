@@ -16,11 +16,12 @@ from ..services.downloader import Downloader
 from .deps import get_broker, get_downloader, get_repo, get_settings
 
 router = APIRouter(prefix="/api", tags=["system"])
+public_router = APIRouter(prefix="/api", tags=["system"])
 
 HEARTBEAT_SECONDS = 15
 
 
-@router.get("/health")
+@public_router.get("/health")
 async def health():
     return {"status": "ok"}
 
@@ -33,7 +34,17 @@ async def system(
 ):
     usage = shutil.disk_usage(cfg.audio_dir)
     audio_bytes = sum(p.stat().st_size for p in cfg.audio_dir.glob("*.mp3"))
+    from ..services.backup import latest_backup_age, list_backups
+
+    backup_age = latest_backup_age(cfg.backup_dir)
     return {
+        "storage": {
+            "retention_days": cfg.retention_days,
+            "max_storage_gb": cfg.max_storage_gb,
+            "files": len(list(cfg.audio_dir.glob("*.mp3"))),
+        },
+        "backups": {"count": len(list_backups(cfg.backup_dir)), "latest_age_seconds": backup_age},
+        "auth_enabled": cfg.auth_enabled,
         "ytdlp_version": downloader.version(),
         "ffmpeg_available": shutil.which(cfg.ffmpeg_bin) is not None,
         "concurrency": cfg.concurrency,
@@ -41,6 +52,28 @@ async def system(
         "audio_bytes": audio_bytes,
         "counts": repo.counts(),
         "unseen": repo.unseen_count(),
+    }
+
+
+@router.post("/system/cleanup")
+async def cleanup_now(
+    repo: Annotated[JobRepo, Depends(get_repo)],
+    cfg: Annotated[Settings, Depends(get_settings)],
+    broker: Annotated[EventBroker, Depends(get_broker)],
+):
+    """Dọn dẹp ngay theo cấu hình lưu trữ hiện tại."""
+    from ..schemas import job_to_out
+    from ..services.cleanup import run_cleanup
+
+    result = await asyncio.to_thread(run_cleanup, cfg, repo)
+    for job_id in result.job_ids:
+        job = repo.get(job_id)
+        if job:
+            broker.publish({"type": "job", "job": job_to_out(job)})
+    return {
+        "removed_files": result.removed_files,
+        "orphan_files": result.orphan_files,
+        "freed_bytes": result.freed_bytes,
     }
 
 

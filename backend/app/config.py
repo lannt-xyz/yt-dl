@@ -7,6 +7,12 @@ from pathlib import Path
 ALLOWED_BITRATES = (128, 192, 256, 320)
 
 
+def _opt_bool(value: str | None) -> bool | None:
+    if value is None or value == "":
+        return None
+    return value.lower() in ("1", "true", "yes")
+
+
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
@@ -16,6 +22,16 @@ class Settings:
     ffprobe_bin: str = "ffprobe"
     static_dir: Path | None = None
     update_check_hours: float = 24.0
+    password: str | None = None
+    password_hash: str | None = None
+    session_days: int = 30
+    trust_proxy: bool = False
+    cookie_secure: bool | None = None  # None = tự theo scheme của request
+    retention_days: int = 30
+    max_storage_gb: float = 0.0
+    cleanup_interval_min: float = 60.0
+    backup_keep: int = 7
+    backup_interval_hours: float = 24.0
     vapid_subject: str = "mailto:admin@example.com"
     push_extra_hosts: tuple[str, ...] = ()
     smoke_url: str | None = "https://www.youtube.com/watch?v=jNQXAC9IVRw"
@@ -27,6 +43,18 @@ class Settings:
     @property
     def audio_dir(self) -> Path:
         return self.data_dir / "audio"
+
+    @property
+    def auth_enabled(self) -> bool:
+        return bool(self.password or self.password_hash)
+
+    @property
+    def backup_dir(self) -> Path:
+        return self.data_dir / "backups"
+
+    @property
+    def secret_key_path(self) -> Path:
+        return self.data_dir / "secret.key"
 
     @property
     def vapid_key_path(self) -> Path:
@@ -51,6 +79,16 @@ class Settings:
             ffprobe_bin=os.environ.get("YT_FFPROBE", "ffprobe"),
             static_dir=Path(static).resolve() if static else None,
             update_check_hours=float(os.environ.get("YT_UPDATE_CHECK_HOURS", "24")),
+            password=os.environ.get("YT_PASSWORD") or None,
+            password_hash=os.environ.get("YT_PASSWORD_HASH") or None,
+            session_days=int(os.environ.get("YT_SESSION_DAYS", "30")),
+            trust_proxy=os.environ.get("YT_TRUST_PROXY", "").lower() in ("1", "true", "yes"),
+            cookie_secure=_opt_bool(os.environ.get("YT_COOKIE_SECURE")),
+            retention_days=int(os.environ.get("YT_RETENTION_DAYS", "30")),
+            max_storage_gb=float(os.environ.get("YT_MAX_STORAGE_GB", "0")),
+            cleanup_interval_min=float(os.environ.get("YT_CLEANUP_INTERVAL_MIN", "60")),
+            backup_keep=int(os.environ.get("YT_BACKUP_KEEP", "7")),
+            backup_interval_hours=float(os.environ.get("YT_BACKUP_INTERVAL_HOURS", "24")),
             vapid_subject=os.environ.get("YT_VAPID_SUBJECT", "mailto:admin@example.com"),
             push_extra_hosts=tuple(
                 h.strip().lower()

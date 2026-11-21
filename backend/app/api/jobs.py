@@ -134,8 +134,11 @@ async def cancel_job(job_id: str, repo: Repo, worker: Worker, broker: Broker):
 @router.post("/{job_id}/retry", response_model=JobOut)
 async def retry_job(job_id: str, repo: Repo, worker: Worker, broker: Broker):
     job = _get_or_404(repo, job_id)
-    if job["kind"] != "download" or job["status"] not in ("failed", "cancelled"):
-        raise _error(409, "not_retryable", "Chỉ thử lại được job tải đã lỗi hoặc đã hủy")
+    file_gone = job["status"] == "done" and not job.get("file_name")  # file đã bị dọn dẹp
+    if job["kind"] != "download" or not (job["status"] in ("failed", "cancelled") or file_gone):
+        raise _error(
+            409, "not_retryable", "Chỉ thử lại được job tải đã lỗi, đã hủy hoặc đã bị dọn file"
+        )
     repo.update(
         job_id, status="queued", progress=0, error_code=None, error_message=None,
         started_at=None, finished_at=None, seen=0, created_at=time.time(),

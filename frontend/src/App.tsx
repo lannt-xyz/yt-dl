@@ -1,9 +1,12 @@
 import clsx from "clsx";
-import { AudioLines, WifiOff } from "lucide-react";
+import { AudioLines, Settings, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useMediaQuery } from "./lib/useMediaQuery";
 import { BottomNav, type Tab } from "./components/BottomNav";
 import { MiniPlayer } from "./components/MiniPlayer";
+import { SettingsSheet } from "./components/SettingsSheet";
+import { IconButton } from "./components/ui";
+import { useYtdlp } from "./state/ytdlp";
 import { HistorySection, QueueSection, RecentSection } from "./components/Sections";
 import { UrlForm } from "./components/UrlForm";
 import { isActive } from "./api/types";
@@ -12,6 +15,8 @@ import { useJobs } from "./state/jobs";
 export default function App() {
   const { jobs, unseen, online } = useJobs();
   const [tab, setTab] = useState<Tab>("download");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { status: ytdlp } = useYtdlp();
   const desktop = useMediaQuery("(min-width: 1024px)");
   const activeCount = jobs.filter((j) => isActive(j.status)).length;
 
@@ -29,11 +34,25 @@ export default function App() {
             </span>
             <h1 className="text-lg font-bold tracking-tight">YT → MP3</h1>
           </div>
+          <div className="flex items-center gap-1">
           {!online && (
             <span role="status" className="flex items-center gap-1.5 rounded-full bg-warn/15 px-3 py-1 text-xs font-semibold text-warn">
               <WifiOff className="size-3.5" /> Mất kết nối
             </span>
           )}
+            <div className="relative">
+              <IconButton label="Cài đặt" onClick={() => setSettingsOpen(true)}>
+                <Settings className="size-5" />
+              </IconButton>
+              {ytdlp?.update_available && (
+                <span
+                  role="img"
+                  aria-label="Có bản yt-dlp mới"
+                  className="pointer-events-none absolute top-2 right-2 size-2.5 rounded-full bg-accent ring-2 ring-bg"
+                />
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -51,6 +70,7 @@ export default function App() {
       </main>
 
       <MiniPlayer />
+      {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
       <BottomNav tab={tab} onChange={setTab} unseen={unseen} active={activeCount} />
     </div>
   );

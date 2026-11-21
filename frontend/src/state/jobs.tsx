@@ -12,6 +12,7 @@ import {
 import { ApiError, type CreateJobOptions, api } from "../api/client";
 import type { Job } from "../api/types";
 import { jobsReducer, sortJobs, transitionNotice } from "../lib/jobs";
+import { useEvent, useEvents } from "./events";
 import { useToast } from "./toast";
 
 export type SubmitResult =
@@ -39,7 +40,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
   const [state, dispatch] = useReducer(jobsReducer, {});
   const [loaded, setLoaded] = useState(false);
-  const [online, setOnline] = useState(true);
+  const { online } = useEvents();
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -64,29 +65,17 @@ export function JobsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void refresh();
-    const source = new EventSource("/api/events");
-    source.onopen = () => {
-      setOnline(true);
-      void refresh(); // đồng bộ lại sau khi (kết nối lại) để không lỡ sự kiện
-    };
-    source.onerror = () => setOnline(false);
-    source.addEventListener("job", (e) => {
-      const data = JSON.parse((e as MessageEvent<string>).data) as { job: Job };
-      upsert(data.job);
-    });
-    source.addEventListener("deleted", (e) => {
-      const data = JSON.parse((e as MessageEvent<string>).data) as { id: string };
-      dispatch({ type: "remove", id: data.id });
-    });
     const onVisible = () => {
       if (document.visibilityState === "visible") void refresh();
     };
     document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      source.close();
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [refresh, upsert]);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refresh]);
+
+  // (kết nối lại) SSE → đồng bộ lại để không lỡ sự kiện
+  useEvent("open", () => void refresh());
+  useEvent("job", (data) => upsert((data as { job: Job }).job));
+  useEvent("deleted", (data) => dispatch({ type: "remove", id: (data as { id: string }).id }));
 
   const jobs = useMemo(() => sortJobs(Object.values(state)), [state]);
   const unseen = useMemo(

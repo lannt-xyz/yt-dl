@@ -10,13 +10,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 
-from .api import jobs, system
+from .api import jobs, system, ytdlp
 from .config import Settings
 from .db import Database
 from .events import EventBroker
 from .repository import JobRepo
-from .services.downloader import Downloader, YtDlpDownloader
+from .services.downloader import Downloader, SubprocessDownloader
 from .services.worker import JobWorker
+from .services.ytdlp_manager import UpdateError, YtDlpManager
 
 log = logging.getLogger("app")
 
@@ -31,8 +32,12 @@ def create_app(settings: Settings | None = None, downloader: Downloader | None =
         repo = JobRepo(db)
         broker = EventBroker()
         broker.bind_loop(asyncio.get_running_loop())
-        dl = downloader or YtDlpDownloader()
-        worker = JobWorker(repo, dl, broker, settings)
+        manager = YtDlpManager(settings.ytdlp_dir, smoke_url=settings.smoke_url)
+        dl = downloader or SubprocessDownloader(manager)
+        worker = JobWorker(
+            repo, dl, broker, settings,
+            recovery=lambda: manager.auto_update and manager.update_if_newer(),
+        )  # fmt: skip
 
         recovered = repo.reset_running_to_queued()
         if recovered:
@@ -44,11 +49,18 @@ def create_app(settings: Settings | None = None, downloader: Downloader | None =
         app.state.broker = broker
         app.state.downloader = dl
         app.state.worker = worker
+        app.state.ytdlp = manager
+        app.state.background_tasks = set()
         await worker.start()
         worker.wake()
+        checker = asyncio.create_task(_periodic_check(manager, broker, settings))
         try:
             yield
         finally:
+            checker.cancel()
+            for task in list(app.state.background_tasks):
+                task.cancel()
+            await asyncio.gather(checker, return_exceptions=True)
             await worker.stop()
             db.close()
 
@@ -71,8 +83,30 @@ def create_app(settings: Settings | None = None, downloader: Downloader | None =
 
     app.include_router(system.router)
     app.include_router(jobs.router)
+    app.include_router(ytdlp.router)
     _mount_frontend(app, settings.static_dir)
     return app
+
+
+async def _periodic_check(
+    manager: YtDlpManager, broker: EventBroker, settings: Settings, first_delay: float = 60.0
+) -> None:
+    """Mỗi ``update_check_hours`` giờ: kiểm tra bản mới, tự cập nhật nếu được bật."""
+    if settings.update_check_hours <= 0:
+        return
+    delay = first_delay
+    while True:
+        await asyncio.sleep(delay)
+        delay = settings.update_check_hours * 3600
+        try:
+            await asyncio.to_thread(manager.check_latest)
+            if manager.auto_update and manager.status()["update_available"]:
+                await asyncio.to_thread(manager.update)
+        except UpdateError as exc:
+            log.warning("Kiểm tra/cập nhật yt-dlp: %s", exc)
+        except Exception:
+            log.exception("Lỗi khi kiểm tra yt-dlp định kỳ")
+        broker.publish({"type": "ytdlp", "status": await asyncio.to_thread(manager.status)})
 
 
 def _mount_frontend(app: FastAPI, static_dir: Path | None) -> None:

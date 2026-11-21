@@ -2,6 +2,8 @@ import clsx from "clsx";
 import {
   AlertTriangle,
   ArrowDownToLine,
+  ArrowUpCircle,
+  Loader2,
   Pause,
   Play,
   RotateCcw,
@@ -16,6 +18,7 @@ import { STATUS_LABEL, displayTitle } from "../lib/jobs";
 import { useJobs } from "../state/jobs";
 import { usePlayer } from "../state/player";
 import { useTrim } from "../state/trim";
+import { useYtdlp } from "../state/ytdlp";
 import { StepProgress } from "./StepProgress";
 import { IconButton } from "./ui";
 
@@ -81,6 +84,7 @@ export const JobCard = memo(function JobCard({ job }: { job: Job }) {
   const { cancel, retry, remove } = useJobs();
   const player = usePlayer();
   const trim = useTrim();
+  const ytdlp = useYtdlp();
   const active = isActive(job.status);
   const playingThis = player.current?.id === job.id && player.playing;
 
@@ -114,6 +118,17 @@ export const JobCard = memo(function JobCard({ job }: { job: Job }) {
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <p className="min-w-0 break-words">{job.error_message ?? "Tải thất bại"}</p>
         </div>
+      )}
+      {job.status === "failed" && job.error_code === "needs_update" && (
+        <button
+          type="button"
+          disabled={ytdlp.busy}
+          onClick={() => void ytdlp.updateThenRetry(job.id)}
+          className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-60"
+        >
+          {ytdlp.busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUpCircle className="size-4" />}
+          {ytdlp.busy ? "Đang cập nhật yt-dlp…" : "Cập nhật yt-dlp và thử lại"}
+        </button>
       )}
 
       <div className="mt-2 flex items-center justify-end gap-1">

@@ -118,7 +118,7 @@ nút **Dán** trong app, hoặc **Phím tắt (Shortcuts)** — tạo token tron
 
 ## 7. Phát hành image lên Docker Hub (GitHub Actions)
 
-Workflow `CI` (job `docker`) tự build image đa kiến trúc `linux/amd64` + `linux/arm64` và đẩy lên
+Workflow `CI` (job `publish`) tự build image đa kiến trúc `linux/amd64` + `linux/arm64` và đẩy lên
 **`lanntxyz/yt-dl`** khi:
 
 | Sự kiện | Tag được đẩy |
@@ -128,7 +128,7 @@ Workflow `CI` (job `docker`) tự build image đa kiến trúc `linux/amd64` + `
 | push nhánh khác / pull request | chỉ build thử (amd64), **không đẩy** |
 
 Cấu hình một lần: Docker Hub → Account settings → Security → **New Access Token** (quyền *Read & Write*), rồi trong
-GitHub repo → Settings → Secrets and variables → Actions thêm:
+GitHub repo → Settings → Secrets and variables → Actions thêm (đặt trong environment **`PERSONAL`** hoặc cấp repo đều được; workflow dùng environment `PERSONAL`):
 
 - `DOCKERHUB_USERNAME` = `lanntxyz`
 - `DOCKERHUB_TOKEN` = token vừa tạo
@@ -183,6 +183,6 @@ Runner của GitHub không tới được mạng nhà bạn. Có hai cách:
 
 - Khóa deploy chỉ nên dùng cho việc này. Muốn chặt hơn, giới hạn trong `authorized_keys` trên Pi:
   `no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAA... github-actions-deploy`.
-- Tạo environment `production` (Settings → Environments) và bật **Required reviewers** nếu muốn duyệt tay trước mỗi lần deploy.
+- Bật **Required reviewers** cho environment `PERSONAL` (Settings → Environments) nếu muốn duyệt tay trước mỗi lần deploy.
 - Khóa được ghi ra runner chỉ trong lúc deploy và bị xóa ở bước cuối; host được xác thực bằng `SSH_KNOWN_HOSTS`.
 - Chạy tay trên Pi bất cứ lúc nào: `DEPLOY_PATH=/home/pi/yt-dl sh scripts/deploy.sh`.

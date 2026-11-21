@@ -13,6 +13,13 @@ export class ApiError extends Error {
   }
 }
 
+let unauthorizedHandler: (() => void) | null = null;
+
+/** AuthProvider đăng ký hàm này để quay về màn hình đăng nhập khi phiên hết hạn. */
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  unauthorizedHandler = fn;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -23,6 +30,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new ApiError(0, "network", "Không kết nối được tới máy chủ");
   }
+  if (res.status === 401 && !path.startsWith("/api/auth/login")) unauthorizedHandler?.();
   if (res.status === 204) return undefined as T;
   let body: unknown = null;
   try {
@@ -77,6 +85,27 @@ export interface YtdlpStatus {
   updating: boolean;
 }
 
+export interface AuthStatus {
+  required: boolean;
+  authenticated: boolean;
+}
+
+export interface ApiToken {
+  id: string;
+  name: string;
+  created_at: number;
+  last_used_at: number | null;
+}
+
+export interface SystemInfo {
+  ytdlp_version: string;
+  disk: { total: number; used: number; free: number };
+  audio_bytes: number;
+  storage: { retention_days: number; max_storage_gb: number; files: number };
+  backups: { count: number; latest_age_seconds: number | null };
+  auth_enabled: boolean;
+}
+
 export const api = {
   listJobs: (limit = 200) => request<JobList>(`/api/jobs?limit=${limit}`),
   createJob: (url: string, opts: CreateJobOptions = {}) =>
@@ -112,6 +141,30 @@ export const api = {
         body: JSON.stringify({ endpoint }),
       }),
     test: () => request<{ sent: number }>("/api/push/test", { method: "POST" }),
+  },
+  auth: {
+    status: () => request<AuthStatus>("/api/auth/status"),
+    login: (password: string) =>
+      request<{ authenticated: boolean }>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      }),
+    logout: () => request<{ authenticated: boolean }>("/api/auth/logout", { method: "POST" }),
+    tokens: () => request<{ items: ApiToken[] }>("/api/auth/tokens"),
+    createToken: (name: string) =>
+      request<{ id: string; name: string; token: string }>("/api/auth/tokens", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      }),
+    revokeToken: (id: string) => request<void>(`/api/auth/tokens/${id}`, { method: "DELETE" }),
+  },
+  system: {
+    info: () => request<SystemInfo>("/api/system"),
+    cleanup: () =>
+      request<{ removed_files: number; orphan_files: number; freed_bytes: number }>(
+        "/api/system/cleanup",
+        { method: "POST" },
+      ),
   },
   markSeen: () => request<{ updated: number }>("/api/jobs/mark-seen", { method: "POST" }),
 };

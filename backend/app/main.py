@@ -6,11 +6,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 
+from .api import auth as auth_api
 from .api import jobs, push, system, ytdlp
+from .api.auth import require_auth
+from .auth import AuthManager
 from .config import Settings
 from .db import Database
 from .events import EventBroker
@@ -67,17 +70,20 @@ def create_app(
         app.state.worker = worker
         app.state.ytdlp = manager
         app.state.push = notifier
+        app.state.auth = AuthManager(settings, db)
         app.state.background_tasks = set()
         await worker.start()
         worker.wake()
         checker = asyncio.create_task(_periodic_check(manager, broker, settings))
+        maintenance = asyncio.create_task(_maintenance(repo, broker, settings))
         try:
             yield
         finally:
             checker.cancel()
+            maintenance.cancel()
             for task in list(app.state.background_tasks):
                 task.cancel()
-            await asyncio.gather(checker, return_exceptions=True)
+            await asyncio.gather(checker, maintenance, return_exceptions=True)
             await worker.stop()
             notifier.shutdown()
             db.close()
@@ -99,10 +105,13 @@ def create_app(
         body = {"code": "validation_error", "message": message}
         return JSONResponse({"detail": body}, status_code=422)
 
-    app.include_router(system.router)
-    app.include_router(jobs.router)
-    app.include_router(ytdlp.router)
-    app.include_router(push.router)
+    protected = [Depends(require_auth)]
+    app.include_router(auth_api.router)
+    app.include_router(system.public_router)
+    app.include_router(system.router, dependencies=protected)
+    app.include_router(jobs.router, dependencies=protected)
+    app.include_router(ytdlp.router, dependencies=protected)
+    app.include_router(push.router, dependencies=protected)
     _mount_frontend(app, settings.static_dir)
     return app
 
@@ -126,6 +135,35 @@ async def _periodic_check(
         except Exception:
             log.exception("Lỗi khi kiểm tra yt-dlp định kỳ")
         broker.publish({"type": "ytdlp", "status": await asyncio.to_thread(manager.status)})
+
+
+async def _maintenance(
+    repo: JobRepo, broker: EventBroker, settings: Settings, first_delay: float = 30.0
+) -> None:
+    """Định kỳ: dọn file cũ/mồ côi, và sao lưu cơ sở dữ liệu mỗi ``backup_interval_hours`` giờ."""
+    from .schemas import job_to_out
+    from .services.backup import backup_database, latest_backup_age
+    from .services.cleanup import run_cleanup
+
+    await asyncio.sleep(first_delay)
+    while True:
+        try:
+            result = await asyncio.to_thread(run_cleanup, settings, repo)
+            for job_id in result.job_ids:
+                job = repo.get(job_id)
+                if job:
+                    broker.publish({"type": "job", "job": job_to_out(job)})
+            if settings.backup_interval_hours > 0:
+                age = latest_backup_age(settings.backup_dir)
+                if age is None or age >= settings.backup_interval_hours * 3600:
+                    await asyncio.to_thread(
+                        backup_database, settings.db_path, settings.backup_dir, settings.backup_keep
+                    )
+        except Exception:
+            log.exception("Lỗi khi bảo trì định kỳ")
+        if settings.cleanup_interval_min <= 0:
+            return
+        await asyncio.sleep(settings.cleanup_interval_min * 60)
 
 
 def _mount_frontend(app: FastAPI, static_dir: Path | None) -> None:

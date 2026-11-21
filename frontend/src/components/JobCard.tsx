@@ -105,6 +105,9 @@ export const JobCard = memo(function JobCard({ job }: { job: Job }) {
             {displayTitle(job)}
           </h3>
           <Meta job={job} />
+          {job.status === "done" && !job.has_file && (
+            <p className="mt-1.5 text-xs font-medium text-warn">Đã dọn file để tiết kiệm dung lượng</p>
+          )}
           {active && job.status === "queued" && (
             <p className="mt-1.5 text-xs font-medium text-muted">{STATUS_LABEL.queued}…</p>
           )}
@@ -162,8 +165,9 @@ export const JobCard = memo(function JobCard({ job }: { job: Job }) {
           </>
         )}
 
-        {(job.status === "failed" || job.status === "cancelled") && job.kind === "download" && (
-          <IconButton label="Thử lại" tone="accent" onClick={() => void retry(job.id)}>
+        {(job.status === "failed" || job.status === "cancelled" || (job.status === "done" && !job.has_file)) &&
+          job.kind === "download" && (
+          <IconButton label={job.status === "done" ? "Tải lại" : "Thử lại"} tone="accent" onClick={() => void retry(job.id)}>
             <RotateCcw className="size-5" />
           </IconButton>
         )}

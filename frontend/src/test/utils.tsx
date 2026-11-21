@@ -2,6 +2,7 @@ import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { vi } from "vitest";
 import type { Job } from "../api/types";
+import { AuthContext } from "../state/auth";
 import { EventsProvider } from "../state/events";
 import { JobsProvider } from "../state/jobs";
 import { PlayerProvider } from "../state/player";
@@ -55,6 +56,9 @@ export function mockApi(initial: Job[] = [], handler?: Handler) {
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     const call = { url, method, body };
     calls.push(call);
+    if (url === "/api/auth/status" && !handler?.(call)) {
+      return new Response(JSON.stringify({ required: false, authenticated: true }));
+    }
     const custom = handler?.(call);
     if (custom) {
       return new Response(custom.status === 204 ? null : JSON.stringify(custom.body ?? {}), {
@@ -75,15 +79,17 @@ export function mockApi(initial: Job[] = [], handler?: Handler) {
 export function renderApp(ui: ReactElement) {
   return render(
     <ToastProvider>
-      <EventsProvider>
-        <PlayerProvider>
-          <JobsProvider>
-            <YtdlpProvider>
-              <TrimProvider>{ui}</TrimProvider>
-            </YtdlpProvider>
-          </JobsProvider>
-        </PlayerProvider>
-      </EventsProvider>
+      <AuthContext.Provider value={{ required: false, logout: async () => {} }}>
+        <EventsProvider>
+          <PlayerProvider>
+            <JobsProvider>
+              <YtdlpProvider>
+                <TrimProvider>{ui}</TrimProvider>
+              </YtdlpProvider>
+            </JobsProvider>
+          </PlayerProvider>
+        </EventsProvider>
+      </AuthContext.Provider>
     </ToastProvider>,
   );
 }

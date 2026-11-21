@@ -36,6 +36,14 @@ CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_video ON jobs(video_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_parent ON jobs(parent_id);
 
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id           TEXT PRIMARY KEY,
+    name         TEXT NOT NULL,
+    token_hash   TEXT NOT NULL UNIQUE,
+    created_at   REAL NOT NULL,
+    last_used_at REAL
+);
+
 CREATE TABLE IF NOT EXISTS push_subscriptions (
     endpoint   TEXT PRIMARY KEY,
     p256dh     TEXT NOT NULL,

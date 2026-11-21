@@ -32,4 +32,15 @@ Mobile-first (iPhone/iPad là chính), dark/light theo hệ thống. Mở `/?url
 - Khóa VAPID tự sinh tại `data/vapid_private.pem` (đừng commit; xóa file nếu muốn đăng ký lại toàn bộ thiết bị).
 - Sinh lại icon: `cd frontend && node scripts/generate-icons.cjs`.
 
+## Triển khai (Raspberry Pi + Docker)
+
+Xem [docs/DEPLOY-PI.md](docs/DEPLOY-PI.md): Docker Compose, Tailscale HTTPS, đăng nhập, sao lưu, dọn dẹp tự động.
+
+```bash
+cp .env.example .env     # đặt mật khẩu
+docker compose up -d --build
+```
+
+Đăng nhập: đặt `YT_PASSWORD` (hoặc `YT_PASSWORD_HASH` sinh bằng `python -m app.hashpw`) để bật; bỏ trống = chế độ mở (chỉ dùng trên localhost).
+
 `download.py` ở thư mục gốc là CLI gốc, vẫn dùng được độc lập.

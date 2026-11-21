@@ -1,7 +1,9 @@
 import { Settings, X } from "lucide-react";
 import { type ReactNode, useEffect } from "react";
 import { IconButton } from "./ui";
+import { AccessSection } from "./AccessSection";
 import { PushSection } from "./PushSection";
+import { StorageSection } from "./StorageSection";
 import { YtdlpSection } from "./YtdlpSection";
 
 export function SettingsSheet({ onClose, children }: { onClose: () => void; children?: ReactNode }) {
@@ -42,6 +44,8 @@ export function SettingsSheet({ onClose, children }: { onClose: () => void; chil
         <div className="safe-bottom flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
           <PushSection />
           <YtdlpSection />
+          <StorageSection />
+          <AccessSection />
           {children}
         </div>
       </div>

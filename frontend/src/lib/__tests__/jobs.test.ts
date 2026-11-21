@@ -42,12 +42,23 @@ describe("transitionNotice", () => {
     expect(n?.tone).toBe("error");
     expect(n?.text).toContain("HTTP 403");
   });
-  it("không báo khi hủy, khi chưa từng thấy job, khi vẫn đang chạy, hoặc là bản cắt", () => {
+  it("không báo khi hủy, khi vẫn đang chạy, hoặc là bản cắt", () => {
     expect(transitionNotice(running, { ...running, status: "cancelled" })).toBeNull();
-    expect(transitionNotice(undefined, { ...running, status: "done" })).toBeNull();
     expect(transitionNotice(running, { ...running, status: "converting" })).toBeNull();
     const trim = makeJob({ kind: "trim", status: "converting" });
     expect(transitionNotice(trim, { ...trim, status: "done" })).toBeNull();
+    expect(transitionNotice(undefined, { ...trim, status: "done" })).toBeNull();
+  });
+  it("job chưa biết mà sự kiện cho thấy đã xong/lỗi (xong quá nhanh hoặc do thiết bị khác thêm) vẫn phải báo", () => {
+    expect(transitionNotice(undefined, { ...running, status: "done" })).toMatchObject({ tone: "success" });
+    expect(
+      transitionNotice(undefined, { ...running, status: "failed", error_message: "riêng tư" }),
+    ).toMatchObject({ tone: "error", title: "Tải thất bại" });
+  });
+  it("job chưa biết nhưng còn đang chờ/chạy (vd. phản hồi tạo job) thì chưa báo; đã hủy cũng không báo", () => {
+    expect(transitionNotice(undefined, { ...running, status: "queued" })).toBeNull();
+    expect(transitionNotice(undefined, { ...running, status: "downloading" })).toBeNull();
+    expect(transitionNotice(undefined, { ...running, status: "cancelled" })).toBeNull();
   });
   it("không báo lại khi job đã xong từ trước", () => {
     const done = makeJob({ status: "done" });

@@ -72,9 +72,11 @@ export interface Notice {
 
 /** Thông báo cần hiện khi job đổi trạng thái (null = không cần thông báo). */
 export function transitionNotice(prev: Job | undefined, next: Job): Notice | null {
-  if (!prev || next.kind !== "download" || !isActive(prev.status) || isActive(next.status)) {
-    return null;
-  }
+  if (next.kind !== "download" || isActive(next.status)) return null;
+  // Job đã biết thì chỉ báo khi nó vừa chuyển từ "đang chạy" sang kết thúc. Job CHƯA biết mà sự kiện cho thấy
+  // đã kết thúc (xong/lỗi rất nhanh nên SSE tới trước phản hồi tạo job, hoặc job do thiết bị khác thêm) vẫn phải báo,
+  // nếu không người dùng sẽ không bao giờ biết nó đã xong/lỗi.
+  if (prev && !isActive(prev.status)) return null;
   const name = displayTitle(next);
   if (next.status === "done") return { tone: "success", title: "Tải xong", text: name };
   if (next.status === "failed") {

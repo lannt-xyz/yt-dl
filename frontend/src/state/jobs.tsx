@@ -48,6 +48,8 @@ export function JobsProvider({ children }: { children: ReactNode }) {
     (job: Job) => {
       const notice = transitionNotice(stateRef.current[job.id], job);
       if (notice) toast.push(notice);
+      // cập nhật ref ngay (không đợi render) để hai sự kiện liên tiếp nhìn thấy trạng thái mới nhất
+      stateRef.current = jobsReducer(stateRef.current, { type: "upsert", job });
       dispatch({ type: "upsert", job });
     },
     [toast],
@@ -56,12 +58,17 @@ export function JobsProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const res = await api.listJobs();
+      // sự kiện SSE có thể bị lỡ (chưa kết nối xong, app ở nền) → job đã đổi trạng thái vẫn phải được báo
+      for (const job of res.items) {
+        const notice = transitionNotice(stateRef.current[job.id], job);
+        if (notice) toast.push(notice);
+      }
       dispatch({ type: "replace", jobs: res.items });
       setLoaded(true);
     } catch {
       /* giữ nguyên dữ liệu cũ; trạng thái mạng do SSE quản lý */
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     void refresh();

@@ -135,3 +135,54 @@ GitHub repo → Settings → Secrets and variables → Actions thêm:
 
 Chưa có secrets thì job vẫn chạy nhưng chỉ build thử và in cảnh báo. Phát hành bản có số version:
 `git tag v1.0.0 && git push origin v1.0.0`. Build arm64 qua QEMU mất khoảng 10–20 phút (có cache).
+
+## 8. Tự động deploy lên Pi (GitHub Actions qua SSH)
+
+Sau khi image được đẩy lên Docker Hub (mục 7), job `deploy` SSH vào Pi và chạy [scripts/deploy.sh](../scripts/deploy.sh):
+`docker compose pull` → `up -d` → chờ container `healthy` (quá 120 giây hoặc container chết thì job báo đỏ, kèm log).
+Job chỉ chạy khi push lên `main` **và** image đã thật sự được đẩy; nhánh khác/PR không bao giờ deploy.
+
+### Cấu hình một lần
+
+**1. Tạo khóa SSH riêng cho deploy** (trên máy bạn, không đặt passphrase):
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ./deploy_key -N ""
+ssh-copy-id -i ./deploy_key.pub <user>@<máy-pi>      # hoặc dán deploy_key.pub vào ~/.ssh/authorized_keys trên Pi
+```
+
+**2. Lấy dấu vân tay máy chủ** (chạy từ mạng bạn tin tưởng):
+
+```bash
+ssh-keyscan -p 22 <máy-pi>      # kết quả dán vào secret SSH_KNOWN_HOSTS
+```
+
+**3. Thêm secrets** ở GitHub repo → Settings → Secrets and variables → Actions:
+
+| Secret | Giá trị |
+|---|---|
+| `SSH_HOST` | địa chỉ Pi (IP/tên miền, hoặc tên MagicDNS `pi.<tailnet>.ts.net`) |
+| `SSH_USER` | user SSH trên Pi (user này phải dùng được `docker`) |
+| `SSH_PRIVATE_KEY` | toàn bộ nội dung file `deploy_key` |
+| `SSH_KNOWN_HOSTS` | kết quả `ssh-keyscan` ở bước 2 |
+| `DEPLOY_PATH` | thư mục chứa `docker-compose.yml` và `.env` trên Pi, ví dụ `/home/pi/yt-dl` |
+| `SSH_PORT` | (tùy chọn) cổng SSH nếu khác 22 |
+
+Thiếu secret bắt buộc thì job deploy tự bỏ qua kèm cảnh báo vàng, không làm hỏng pipeline. Sau khi xong, **xóa file `deploy_key` trên máy bạn**.
+
+### Pi nằm sau NAT / chỉ truy cập qua Tailscale?
+
+Runner của GitHub không tới được mạng nhà bạn. Có hai cách:
+
+- **Tailscale (khuyến nghị):** tạo OAuth client (quyền `devices:write`, tag `tag:ci`) trong trang quản trị Tailscale, thêm secrets
+  `TS_OAUTH_CLIENT_ID` và `TS_OAUTH_SECRET`. Job tự đưa runner vào tailnet trước khi SSH; `SSH_HOST` dùng tên MagicDNS/IP Tailscale của Pi.
+  Cần cho phép `tag:ci` truy cập Pi (cổng 22) trong ACL của tailnet.
+- Mở cổng SSH ra Internet (không khuyến nghị): bắt buộc tắt đăng nhập bằng mật khẩu, chỉ cho phép khóa, và nên đổi cổng.
+
+### Bảo mật
+
+- Khóa deploy chỉ nên dùng cho việc này. Muốn chặt hơn, giới hạn trong `authorized_keys` trên Pi:
+  `no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAA... github-actions-deploy`.
+- Tạo environment `production` (Settings → Environments) và bật **Required reviewers** nếu muốn duyệt tay trước mỗi lần deploy.
+- Khóa được ghi ra runner chỉ trong lúc deploy và bị xóa ở bước cuối; host được xác thực bằng `SSH_KNOWN_HOSTS`.
+- Chạy tay trên Pi bất cứ lúc nào: `DEPLOY_PATH=/home/pi/yt-dl sh scripts/deploy.sh`.

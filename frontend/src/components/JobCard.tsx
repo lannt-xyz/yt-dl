@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { type Job, isActive } from "../api/types";
+import { saveAudio } from "../lib/save";
 import { formatBytes, formatDuration, relativeTime } from "../lib/format";
 import { STATUS_LABEL, displayTitle } from "../lib/jobs";
 import { useJobs } from "../state/jobs";
@@ -83,6 +84,7 @@ function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
 export const JobCard = memo(function JobCard({ job }: { job: Job }) {
   const { cancel, retry, remove } = useJobs();
   const player = usePlayer();
+  const [saving, setSaving] = useState(false);
   const trim = useTrim();
   const ytdlp = useYtdlp();
   const active = isActive(job.status);
@@ -153,15 +155,19 @@ export const JobCard = memo(function JobCard({ job }: { job: Job }) {
             <IconButton label="Cắt" onClick={() => trim.open(job)}>
               <Scissors className="size-5" />
             </IconButton>
-            <a
-              href={job.download_url ?? "#"}
-              download
-              aria-label="Tải xuống"
-              title="Tải xuống"
-              className="grid size-11 place-items-center rounded-xl text-muted hover:bg-surface-2 hover:text-ink"
+            <IconButton
+              label="Tải xuống"
+              disabled={saving}
+              onClick={() => {
+                if (!job.download_url) return;
+                setSaving(true);
+                void saveAudio(job.download_url, `${displayTitle(job)}.mp3`)
+                  .catch(() => window.alert("Không tải được file, thử lại nhé."))
+                  .finally(() => setSaving(false));
+              }}
             >
-              <ArrowDownToLine className="size-5" />
-            </a>
+              {saving ? <Loader2 className="size-5 animate-spin" /> : <ArrowDownToLine className="size-5" />}
+            </IconButton>
           </>
         )}
 

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { expect, test } from "@playwright/test";
 import { addUrl, cardFor, openHistory, reset, toast } from "./helpers";
 
@@ -8,7 +9,7 @@ test.beforeEach(async ({ request, page }) => {
   await page.goto("/");
 });
 
-test("dán link → tải xong → cắt → tải file MP3 về", async ({ page, request }) => {
+test("dán link → tải xong → cắt → tải file MP3 về", async ({ page }) => {
   await addUrl(page, ID);
   await expect(toast(page, "Đã thêm vào hàng đợi")).toBeVisible();
   await expect(toast(page, "Tải xong")).toBeVisible();
@@ -37,12 +38,13 @@ test("dán link → tải xong → cắt → tải file MP3 về", async ({ page
   const trimmed = page.getByRole("article").filter({ has: page.getByLabel("Bản cắt") });
   await expect(trimmed).toBeVisible();
   await expect(trimmed).toContainText("[0:05-0:15]");
-  const href = await trimmed.getByRole("link", { name: "Tải xuống" }).getAttribute("href");
-  const res = await request.get(href!);
-  expect(res.status()).toBe(200);
-  expect(res.headers()["content-type"]).toBe("audio/mpeg");
-  expect(res.headers()["content-disposition"]).toContain("attachment");
-  const body = await res.body();
+  // nút tải: fetch blob rồi lưu không điều hướng khỏi app (Chromium → sự kiện download)
+  const [dl] = await Promise.all([
+    page.waitForEvent("download"),
+    trimmed.getByRole("button", { name: "Tải xuống" }).click(),
+  ]);
+  expect(page.url()).toContain("/");
+  const body = fs.readFileSync((await dl.path())!);
   expect(body.subarray(0, 3).toString()).toBe("ID3"); // tag ID3 do ffmpeg ghi
   // 10 giây ở 192 kbps ≈ 240 KB
   expect(body.length).toBeGreaterThan(200_000);

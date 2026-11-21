@@ -67,7 +67,7 @@ test("vùng chạm đủ lớn: nút trên thẻ ≥ 44px, tay cầm trim ≥ 44
   await openHistory(page);
   const card = cardFor(page, ID);
   for (const name of ["Phát", "Cắt", "Tải xuống", "Xóa"]) {
-    const el = name === "Tải xuống" ? card.getByRole("link", { name }) : card.getByRole("button", { name });
+    const el = card.getByRole("button", { name });
     const b = await el.boundingBox();
     expect(b!.width, `${name} rộng`).toBeGreaterThanOrEqual(43.5);
     expect(b!.height, `${name} cao`).toBeGreaterThanOrEqual(43.5);

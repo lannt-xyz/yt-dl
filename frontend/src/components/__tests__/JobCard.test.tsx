@@ -30,11 +30,11 @@ it("job lỗi: hiện lý do và cho thử lại", async () => {
   await waitFor(() => expect(calls.some((c) => c.url.endsWith("/retry"))).toBe(true));
 });
 
-it("job xong: có link tải và nút phát", () => {
+it("job xong: có nút tải và nút phát", () => {
   const job = makeJob();
   mockApi([job]);
   renderApp(<JobCard job={job} />);
-  expect(screen.getByRole("link", { name: "Tải xuống" })).toHaveAttribute("href", job.download_url);
+  expect(screen.getByRole("button", { name: "Tải xuống" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Phát" })).toBeInTheDocument();
   expect(screen.getByText(/3\.2 MB/)).toBeInTheDocument();
 });

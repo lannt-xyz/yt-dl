@@ -97,6 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      pushed: ${{ steps.cfg.outputs.push }} # job deploy chỉ chạy khi image thật sự đã được đẩy
     env:
       IMAGE: lanntxyz/yt-dl
       # secret không dùng trực tiếp trong `if` được nên ánh xạ qua env
@@ -152,3 +154,69 @@ jobs:
           sbom: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy lên Pi qua SSH (pull image + khởi động lại container)
+    needs: docker
+    if: needs.docker.outputs.pushed == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Có thể bật "Required reviewers" ở Settings → Environments → production để duyệt tay trước khi deploy
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false # không hủy lần deploy đang chạy dở
+    env:
+      HAS_SSH: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_PRIVATE_KEY != '' && secrets.SSH_KNOWN_HOSTS != '' && secrets.DEPLOY_PATH != '' }}
+      HAS_TAILSCALE: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts # chỉ cần scripts/deploy.sh
+
+      - name: Kiểm tra cấu hình deploy
+        id: cfg
+        run: |
+          if [ "$HAS_SSH" = "true" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Bỏ qua deploy: thiếu một trong các secrets SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, SSH_KNOWN_HOSTS, DEPLOY_PATH."
+          fi
+
+      # Tùy chọn: nếu Pi chỉ truy cập được qua Tailscale, đưa runner vào tailnet trước khi SSH
+      - name: Kết nối Tailscale (tùy chọn)
+        if: steps.cfg.outputs.run == 'true' && env.HAS_TAILSCALE == 'true'
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Cấu hình SSH
+        if: steps.cfg.outputs.run == 'true'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Xác thực máy chủ bằng known_hosts đã lưu sẵn (không dùng ssh-keyscan lúc chạy để tránh bị giả mạo)
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy
+        if: steps.cfg.outputs.run == 'true'
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          printf -v dp '%q' "$DEPLOY_PATH"
+          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            "$SSH_USER@$SSH_HOST" "DEPLOY_PATH=$dp sh -s" < scripts/deploy.sh
+
+      - name: Xóa khóa SSH khỏi runner
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

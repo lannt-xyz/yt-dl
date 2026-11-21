@@ -26,7 +26,7 @@ Hiện trạng: [download.py](../download.py) là CLI dùng `yt_dlp` + `ffmpeg`,
 | Frontend | Vite + React + TS + Tailwind (shadcn/ui) | đã chốt; mobile-first (iPad/iPhone là chính, PC thỉnh thoảng) |
 | Thông báo | Web Push (VAPID, `pywebpush`) + thông báo trong app | iOS chỉ nhận push khi app đã "Thêm vào Màn hình chính" |
 | Nơi chạy | Raspberry Pi 4 (ARM64) | xem mục 7 |
-| Waveform/trim UI | wavesurfer.js + plugin Regions | |
+| Waveform/trim UI | Canvas + pointer events tự viết (không dùng wavesurfer.js) | Quyết định khi triển khai: tay cầm 44px, kéo mượt bằng ngón tay, dùng peaks do server tính nên không giải mã audio ở client; dễ test logic thuần |
 | Cắt audio | ffmpeg phía server | chính xác, trim lại nhiều lần |
 | Đóng gói | Docker Compose | ffmpeg + Python nằm sẵn trong image |
 

@@ -15,6 +15,7 @@ import { formatBytes, formatDuration, relativeTime } from "../lib/format";
 import { STATUS_LABEL, displayTitle } from "../lib/jobs";
 import { useJobs } from "../state/jobs";
 import { usePlayer } from "../state/player";
+import { useTrim } from "../state/trim";
 import { StepProgress } from "./StepProgress";
 import { IconButton } from "./ui";
 
@@ -79,6 +80,7 @@ function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
 export const JobCard = memo(function JobCard({ job }: { job: Job }) {
   const { cancel, retry, remove } = useJobs();
   const player = usePlayer();
+  const trim = useTrim();
   const active = isActive(job.status);
   const playingThis = player.current?.id === job.id && player.playing;
 
@@ -129,6 +131,9 @@ export const JobCard = memo(function JobCard({ job }: { job: Job }) {
               onClick={() => player.toggle(job)}
             >
               {playingThis ? <Pause className="size-5" /> : <Play className="size-5" />}
+            </IconButton>
+            <IconButton label="Cắt" onClick={() => trim.open(job)}>
+              <Scissors className="size-5" />
             </IconButton>
             <a
               href={job.download_url ?? "#"}

@@ -1,5 +1,4 @@
 # Dữ liệu sinh ra khi chạy E2E (DB, khóa thử nghiệm, báo cáo). Đường dẫn tính từ thư mục này.
-.data/
-.data-auth/
+.data*/
 .results/
 .report/

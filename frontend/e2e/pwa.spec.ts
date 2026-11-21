@@ -75,6 +75,12 @@ test("deep link ?url= (Shortcut/bookmarklet) và ?tab=history (shortcut của PW
 });
 
 test("cài đặt → thông báo: có công tắc (chưa bật) trên trình duyệt hỗ trợ push", async ({ page }) => {
+  // Chromium headless (bản CI dùng) luôn báo quyền thông báo là "denied" và không cho cấp, trong khi Chrome
+  // thường báo "default". Test này kiểm tra giao diện ở trạng thái "chưa bật", nên giả lập đúng trạng thái đó
+  // để kết quả không phụ thuộc môi trường. (Luồng xin quyền/đăng ký push thật được kiểm ở unit test.)
+  await page.addInitScript(() => {
+    Object.defineProperty(Notification, "permission", { get: () => "default", configurable: true });
+  });
   await page.goto("/");
   await page.getByRole("button", { name: "Cài đặt" }).click();
   await expect(page.getByRole("switch", { name: "Thông báo trên thiết bị này" })).toBeVisible();

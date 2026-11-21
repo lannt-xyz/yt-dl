@@ -1,10 +1,24 @@
 import AxeBuilder from "@axe-core/playwright";
 import { type Page, expect, test } from "@playwright/test";
-import { AUTH_URL, addUrl, cardFor, openHistory, reset, toast } from "./helpers";
+import { AUTH_URL, addUrl, cardFor, openHistory, reset, toast, waitForToastsGone } from "./helpers";
 
 const ID = "dQw4w9WgXcQ";
 
+async function settle(page: Page) {
+  // Ảnh thumbnail tải từ mạng và toast nằm đè lên nội dung làm kết quả quét phụ thuộc tốc độ máy
+  // Chỉ đợi ảnh đang hiển thị: ảnh loading="lazy" nằm trong vùng bị ẩn sẽ không bao giờ được tải
+  await page
+    .waitForFunction(
+      () => [...document.images].filter((img) => img.getClientRects().length > 0).every((img) => img.complete),
+      undefined,
+      { timeout: 10_000 },
+    )
+    .catch(() => undefined); // ảnh ngoài (ytimg) chậm/lỗi không được làm hỏng kiểm tra trợ năng
+  await waitForToastsGone(page);
+}
+
 async function expectNoViolations(page: Page, where: string) {
+  await settle(page);
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   const bad = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   const summary = bad.map((v) => `${v.id} (${v.impact}): ${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join(" | ")}`);

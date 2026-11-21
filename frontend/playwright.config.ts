@@ -20,7 +20,9 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  reporter: process.env.CI ? [["list"], ["html", { open: "never", outputFolder: "e2e/.report" }]] : "list",
+  reporter: process.env.CI
+    ? [["list"], ["github"], ["html", { open: "never", outputFolder: "e2e/.report" }]]
+    : "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
     channel,
